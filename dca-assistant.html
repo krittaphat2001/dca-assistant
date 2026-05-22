@@ -19,9 +19,102 @@
             padding: 20px;
         }
 
-        .container {
-            max-width: 1200px;
+        .page-layout {
+            max-width: 1480px;
             margin: 0 auto;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        /* ── Watchlist Sidebar ── */
+        .sidebar {
+            width: 210px;
+            flex-shrink: 0;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            position: sticky;
+            top: 20px;
+            max-height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 16px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-items {
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .wl-item {
+            padding: 11px 14px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .wl-item:hover { background: #f8f9fa; }
+        .wl-item:last-child { border-bottom: none; }
+
+        .wl-item-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3px;
+        }
+
+        .wl-symbol { font-weight: 700; font-size: 14px; color: #333; }
+
+        .wl-remove {
+            background: none;
+            border: none;
+            color: #ccc;
+            font-size: 15px;
+            padding: 0 2px;
+            cursor: pointer;
+            line-height: 1;
+            font-weight: 400;
+        }
+        .wl-remove:hover { background: none; color: #f44336; }
+
+        .wl-price { font-size: 12px; color: #555; margin-bottom: 5px; }
+
+        .wl-score {
+            display: inline-block;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-bottom: 2px;
+        }
+
+        .wl-rec { font-size: 10px; color: #666; margin-bottom: 1px; }
+        .wl-age { font-size: 10px; color: #bbb; }
+
+        .wl-empty {
+            padding: 28px 16px;
+            text-align: center;
+            color: #bbb;
+            font-size: 12px;
+            line-height: 1.7;
+        }
+
+        /* ── Main Card ── */
+        .container {
+            flex: 1;
+            min-width: 0;
             background: white;
             border-radius: 12px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -265,114 +358,126 @@
         .rsi-scale  { display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-top: 4px; padding: 0 1px; }
         .rsi-value-label { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
 
-        @media (max-width: 768px) {
-            .input-group {
-                flex-direction: column;
-            }
-            
-            .header h1 {
-                font-size: 20px;
-            }
+        @media (max-width: 900px) {
+            .page-layout { flex-direction: column; }
+            .sidebar { width: 100%; position: static; max-height: none; flex-direction: row; }
+            .sidebar-header { writing-mode: horizontal-tb; }
+            .sidebar-items { display: flex; flex-direction: row; overflow-x: auto; flex: 1; }
+            .wl-item { min-width: 160px; border-bottom: none; border-right: 1px solid #f0f0f0; }
+        }
 
-            .metrics-grid {
-                grid-template-columns: 1fr;
-            }
+        @media (max-width: 768px) {
+            .input-group { flex-direction: column; }
+            .header h1 { font-size: 20px; }
+            .metrics-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>📊 DCA Assistant</h1>
-            <p>Real-Time Stock Analysis with Volume Profile & Order Flow</p>
+    <div class="page-layout">
+
+        <!-- Watchlist Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">★ Watchlist</div>
+            <div class="sidebar-items" id="watchlistItems"></div>
+            <div id="watchlistEmpty" class="wl-empty">No tickers yet.<br>Analyze a stock to add it.</div>
         </div>
 
-        <div class="input-section">
-            <div class="input-group">
-                <div class="input-field">
-                    <label>Stock Ticker</label>
-                    <input type="text" id="ticker" placeholder="e.g., AAPL, MSFT, TSLA" value="AAPL">
-                </div>
-                <div class="input-field">
-                    <label>API Endpoint</label>
-                    <input type="text" id="apiEndpoint" placeholder="http://localhost:3000" value="http://localhost:3000">
-                </div>
-                <button id="analyzeBtn" onclick="analyzeStock()">📈 Analyze</button>
-            </div>
-        </div>
-
-        <div class="content">
-            <div id="error" class="error" style="display: none;"></div>
-            <div id="loading" class="loading" style="display: none;">⏳ Fetching real-time data...</div>
-            <div id="emptyState" class="empty-state">
-                <div class="empty-state-icon">📍</div>
-                <p>Enter a ticker symbol and click "Analyze" to get started</p>
+        <!-- Main Card -->
+        <div class="container">
+            <div class="header">
+                <h1>📊 DCA Assistant</h1>
+                <p>Real-Time Stock Analysis with Volume Profile & Order Flow</p>
             </div>
 
-            <div id="results" style="display: none;">
-                <div id="recommendationBox" class="recommendation-box"></div>
+            <div class="input-section">
+                <div class="input-group">
+                    <div class="input-field">
+                        <label>Stock Ticker</label>
+                        <input type="text" id="ticker" placeholder="e.g., AAPL, MSFT, TSLA" value="AAPL">
+                    </div>
+                    <div class="input-field">
+                        <label>API Endpoint</label>
+                        <input type="text" id="apiEndpoint" placeholder="http://localhost:3000" value="http://localhost:3000">
+                    </div>
+                    <button id="analyzeBtn" onclick="analyzeStock()">📈 Analyze</button>
+                </div>
+            </div>
 
-                <div class="tabs">
-                    <button class="tab-button active" onclick="switchTab('overview')">Overview</button>
-                    <button class="tab-button" onclick="switchTab('chart')">Chart</button>
-                    <button class="tab-button" onclick="switchTab('technical')">Technical</button>
-                    <button class="tab-button" onclick="switchTab('fundamental')">Fundamental</button>
-                    <button class="tab-button" onclick="switchTab('market')">Market</button>
+            <div class="content">
+                <div id="error" class="error" style="display: none;"></div>
+                <div id="loading" class="loading" style="display: none;">⏳ Fetching real-time data...</div>
+                <div id="emptyState" class="empty-state">
+                    <div class="empty-state-icon">📍</div>
+                    <p>Enter a ticker symbol and click "Analyze" to get started</p>
                 </div>
 
-                <!-- Overview Tab -->
-                <div id="overview" class="tab-content active">
-                    <div class="metrics-grid" id="overviewMetrics"></div>
-                </div>
+                <div id="results" style="display: none;">
+                    <div id="recommendationBox" class="recommendation-box"></div>
 
-                <!-- Chart Tab -->
-                <div id="chart" class="tab-content">
-                    <div class="chart-section">
-                        <div class="chart-title">Price &amp; Moving Averages (60 days)</div>
-                        <div class="chart-wrapper"><canvas id="priceChart"></canvas></div>
+                    <div class="tabs">
+                        <button class="tab-button active" onclick="switchTab('overview')">Overview</button>
+                        <button class="tab-button" onclick="switchTab('chart')">Chart</button>
+                        <button class="tab-button" onclick="switchTab('technical')">Technical</button>
+                        <button class="tab-button" onclick="switchTab('fundamental')">Fundamental</button>
+                        <button class="tab-button" onclick="switchTab('market')">Market</button>
                     </div>
-                    <div class="chart-section">
-                        <div class="chart-title">Volume</div>
-                        <div class="chart-wrapper"><canvas id="volumeChart"></canvas></div>
+
+                    <!-- Overview Tab -->
+                    <div id="overview" class="tab-content active">
+                        <div class="metrics-grid" id="overviewMetrics"></div>
                     </div>
-                    <div class="chart-section">
-                        <div class="chart-title">RSI (14)</div>
-                        <div class="chart-wrapper">
-                            <div class="rsi-gauge">
-                                <div class="rsi-value-label" id="rsiDisplayVal"></div>
-                                <div class="rsi-track">
-                                    <div class="zone z-oversold">Oversold</div>
-                                    <div class="zone z-neutral">Neutral</div>
-                                    <div class="zone z-overbought">Overbought</div>
-                                    <div class="rsi-needle" id="rsiNeedle"></div>
+
+                    <!-- Chart Tab -->
+                    <div id="chart" class="tab-content">
+                        <div class="chart-section">
+                            <div class="chart-title">Price &amp; Moving Averages (60 days)</div>
+                            <div class="chart-wrapper"><canvas id="priceChart"></canvas></div>
+                        </div>
+                        <div class="chart-section">
+                            <div class="chart-title">Volume</div>
+                            <div class="chart-wrapper"><canvas id="volumeChart"></canvas></div>
+                        </div>
+                        <div class="chart-section">
+                            <div class="chart-title">RSI (14)</div>
+                            <div class="chart-wrapper">
+                                <div class="rsi-gauge">
+                                    <div class="rsi-value-label" id="rsiDisplayVal"></div>
+                                    <div class="rsi-track">
+                                        <div class="zone z-oversold">Oversold</div>
+                                        <div class="zone z-neutral">Neutral</div>
+                                        <div class="zone z-overbought">Overbought</div>
+                                        <div class="rsi-needle" id="rsiNeedle"></div>
+                                    </div>
+                                    <div class="rsi-scale"><span>0</span><span>30</span><span>70</span><span>100</span></div>
                                 </div>
-                                <div class="rsi-scale"><span>0</span><span>30</span><span>70</span><span>100</span></div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Technical Tab -->
-                <div id="technical" class="tab-content">
-                    <div class="metrics-grid" id="technicalMetrics"></div>
-                </div>
+                    <!-- Technical Tab -->
+                    <div id="technical" class="tab-content">
+                        <div class="metrics-grid" id="technicalMetrics"></div>
+                    </div>
 
-                <!-- Fundamental Tab -->
-                <div id="fundamental" class="tab-content">
-                    <div class="metrics-grid" id="fundamentalMetrics"></div>
-                </div>
+                    <!-- Fundamental Tab -->
+                    <div id="fundamental" class="tab-content">
+                        <div class="metrics-grid" id="fundamentalMetrics"></div>
+                    </div>
 
-                <!-- Market Tab -->
-                <div id="market" class="tab-content">
-                    <div class="metrics-grid" id="marketMetrics"></div>
+                    <!-- Market Tab -->
+                    <div id="market" class="tab-content">
+                        <div class="metrics-grid" id="marketMetrics"></div>
+                    </div>
                 </div>
+            </div>
+
+            <div class="footer" id="apiKeyTip">
+                💡 <strong>Tip:</strong> Get your free API key from <a href="https://www.alphavantage.co/api/" target="_blank" style="color: #667eea;">alphavantage.co</a>
+                and set it as: <code>export ALPHA_VANTAGE_KEY=your_key_here</code>
             </div>
         </div>
 
-        <div class="footer" id="apiKeyTip">
-            💡 <strong>Tip:</strong> Get your free API key from <a href="https://www.alphavantage.co/api/" target="_blank" style="color: #667eea;">alphavantage.co</a>
-            and set it as: <code>export ALPHA_VANTAGE_KEY=your_key_here</code>
-        </div>
     </div>
 
     <script>
@@ -380,6 +485,69 @@
         let priceChartInst = null;
         let volumeChartInst = null;
 
+        // ── Watchlist ──────────────────────────────────────────────
+        let watchlist = JSON.parse(localStorage.getItem('dca_watchlist') || '[]');
+
+        function saveWatchlist() {
+            localStorage.setItem('dca_watchlist', JSON.stringify(watchlist));
+        }
+
+        function addToWatchlist(data) {
+            const entry = {
+                symbol: data.symbol,
+                score: parseFloat(data.analysis.dcaScore),
+                recommendation: data.analysis.recommendation,
+                price: data.market.currentPrice,
+                timestamp: data.analysis.timestamp
+            };
+            const idx = watchlist.findIndex(w => w.symbol === data.symbol);
+            if (idx >= 0) watchlist[idx] = entry;
+            else watchlist.push(entry);
+            saveWatchlist();
+            renderWatchlist();
+        }
+
+        function removeFromWatchlist(symbol) {
+            watchlist = watchlist.filter(w => w.symbol !== symbol);
+            saveWatchlist();
+            renderWatchlist();
+        }
+
+        function renderWatchlist() {
+            const container = document.getElementById('watchlistItems');
+            const empty = document.getElementById('watchlistEmpty');
+            if (watchlist.length === 0) {
+                container.innerHTML = '';
+                empty.style.display = '';
+                return;
+            }
+            empty.style.display = 'none';
+            container.innerHTML = watchlist.map(w => {
+                const scoreColor = w.score >= 70 ? '#4caf50' : w.score >= 55 ? '#2196f3' : w.score >= 40 ? '#ff9800' : '#f44336';
+                const ageMin = Math.round((Date.now() - new Date(w.timestamp)) / 60000);
+                const age = ageMin < 1 ? 'just now' : ageMin < 60 ? `${ageMin}m ago` : `${Math.round(ageMin / 60)}h ago`;
+                return `<div class="wl-item" onclick="loadWatchlistItem('${w.symbol}')">
+                    <div class="wl-item-top">
+                        <span class="wl-symbol">${w.symbol}</span>
+                        <button class="wl-remove" onclick="event.stopPropagation();removeFromWatchlist('${w.symbol}')" title="Remove">×</button>
+                    </div>
+                    <div class="wl-price">$${w.price}</div>
+                    <div class="wl-score" style="background:${scoreColor}">${w.score.toFixed(0)}/100</div>
+                    <div class="wl-rec">${w.recommendation}</div>
+                    <div class="wl-age">${age}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function loadWatchlistItem(symbol) {
+            document.getElementById('ticker').value = symbol;
+            analyzeStock();
+        }
+
+        // Render saved watchlist on load
+        renderWatchlist();
+
+        // ── UI helpers ─────────────────────────────────────────────
         function switchTab(tabName) {
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -391,7 +559,7 @@
             if (!data.chartData || !data.chartData.length) return;
 
             const cd = data.chartData;
-            const labels = cd.map(d => d.date.slice(5)); // MM-DD
+            const labels = cd.map(d => d.date.slice(5));
             const closes = cd.map(d => d.close);
             const ma20s  = cd.map(d => d.ma20);
             const ma50s  = cd.map(d => d.ma50);
@@ -436,7 +604,6 @@
                 }
             });
 
-            // RSI gauge
             const rsi = parseFloat(data.technical.rsi);
             const color = rsi < 30 ? '#4caf50' : rsi > 70 ? '#f44336' : '#ff9800';
             const label = rsi < 30 ? 'Oversold' : rsi > 70 ? 'Overbought' : 'Neutral';
@@ -445,11 +612,12 @@
             document.getElementById('rsiNeedle').style.left = rsi + '%';
         }
 
+        // ── Analyze ────────────────────────────────────────────────
         async function analyzeStock() {
-            const ticker = document.getElementById('ticker').value.toUpperCase();
+            const ticker = document.getElementById('ticker').value.toUpperCase().trim();
             const apiEndpoint = document.getElementById('apiEndpoint').value;
 
-            if (!ticker.trim()) {
+            if (!ticker) {
                 showError('Please enter a ticker symbol');
                 return;
             }
@@ -463,15 +631,15 @@
             try {
                 const response = await fetch(`${apiEndpoint}/api/analyze?symbol=${ticker}`);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
+
                 const data = await response.json();
-                
+
                 if (data.error) {
                     showError(data.error);
                 } else {
                     currentData = data;
                     displayResults(data);
-                    // Show non-critical warnings (e.g., missing API key for fundamentals)
+                    addToWatchlist(data);
                     if (data.errors && data.errors.length > 0) {
                         const infoDiv = document.getElementById('error');
                         infoDiv.style.background = '#fff8e1';
@@ -503,7 +671,6 @@
             document.getElementById('apiKeyTip').style.display = data.fundamental ? 'none' : '';
             renderCharts(data);
 
-            // Recommendation Box
             const score = parseFloat(data.analysis.dcaScore);
             let boxClass = 'hold';
             if (score >= 70) boxClass = 'strong-buy';
@@ -514,20 +681,18 @@
             document.getElementById('recommendationBox').innerHTML = `
                 <div class="recommendation-text">${data.analysis.recommendation}</div>
                 <div class="recommendation-score">
-                    <strong>DCA Score:</strong> ${data.analysis.dcaScore}/100 
+                    <strong>DCA Score:</strong> ${data.analysis.dcaScore}/100
                     | <strong>Last Updated:</strong> ${new Date(data.analysis.timestamp).toLocaleString()}
                 </div>
             `;
 
-            // Overview Metrics
             displayMetrics('overview', [
-                { label: 'Current Price', value: `$${data.market.currentPrice}`, icon: '💵' },
-                { label: 'Position (52W)', value: `${data.market.position}%`, icon: '📍' },
-                { label: 'Volume', value: data.market.avgVolume > 40000000 ? 'Strong 📊' : 'Moderate 📊', icon: '📊' },
-                { label: 'Order Flow', value: parseFloat(data.technical.orderFlowDelta) > 0 ? '🟢 Bullish' : '🔴 Bearish', icon: '⚡' }
+                { label: 'Current Price', value: `$${data.market.currentPrice}` },
+                { label: 'Position (52W)', value: `${data.market.position}%` },
+                { label: 'Volume', value: data.market.avgVolume > 40000000 ? 'Strong 📊' : 'Moderate 📊' },
+                { label: 'Order Flow', value: parseFloat(data.technical.orderFlowDelta) > 0 ? '🟢 Bullish' : '🔴 Bearish' }
             ]);
 
-            // Technical Metrics
             const fmtVol = v => v >= 1e9 ? `${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1e3 ? `${(v/1e3).toFixed(0)}K` : String(v);
             displayMetrics('technical', [
                 { label: 'RSI (14)', value: data.technical.rsi, subtext: parseFloat(data.technical.rsi) < 30 ? 'Oversold 🟢' : parseFloat(data.technical.rsi) > 70 ? 'Overbought 🔴' : 'Neutral ⚖️' },
@@ -538,7 +703,6 @@
                 { label: 'Buy Volume', value: fmtVol(data.technical.buyPressure), subtext: `vs Sell: ${fmtVol(data.technical.sellPressure)}` }
             ]);
 
-            // Fundamental Metrics
             const fundContainer = document.getElementById('fundamentalMetrics');
             if (!data.fundamental) {
                 fundContainer.innerHTML = `<div style="padding:20px;color:#888;grid-column:1/-1;">
@@ -566,11 +730,10 @@
                 ]);
             }
 
-            // Market Metrics
             displayMetrics('market', [
-                { label: 'Current Price', value: `$${data.market.currentPrice}`, icon: '💵' },
-                { label: '52-Week High', value: `$${data.market.high52Week}`, icon: '📈' },
-                { label: '52-Week Low', value: `$${data.market.low52Week}`, icon: '📉' },
+                { label: 'Current Price', value: `$${data.market.currentPrice}` },
+                { label: '52-Week High', value: `$${data.market.high52Week}` },
+                { label: '52-Week Low', value: `$${data.market.low52Week}` },
                 { label: 'Avg Daily Volume', value: `${(data.market.avgVolume / 1000000).toFixed(1)}M`, subtext: 'Shares/day' }
             ]);
         }
@@ -586,8 +749,7 @@
             `).join('');
         }
 
-        // Allow Enter key to analyze
-        document.getElementById('ticker').addEventListener('keypress', (e) => {
+        document.getElementById('ticker').addEventListener('keypress', e => {
             if (e.key === 'Enter') analyzeStock();
         });
     </script>
