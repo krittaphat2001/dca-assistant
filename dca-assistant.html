@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DCA Assistant - Real-Time Stock Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .input-section {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .input-field {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .input-field label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .input-field input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .input-field input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #764ba2;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .recommendation-box {
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 5px solid;
+        }
+
+        .recommendation-box.strong-buy {
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        .recommendation-box.buy {
+            background: #e3f2fd;
+            border-color: #2196f3;
+        }
+
+        .recommendation-box.hold {
+            background: #fff9c4;
+            border-color: #fbc02d;
+        }
+
+        .recommendation-box.wait {
+            background: #ffebee;
+            border-color: #f44336;
+        }
+
+        .recommendation-text {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .recommendation-score {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .metric-subtext {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab-button {
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: #666;
+            font-weight: 600;
+            font-size: 14px;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab-button.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #f44336;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 16px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .footer {
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .chart-section { margin-bottom: 24px; }
+        .chart-title { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .chart-wrapper { position: relative; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; padding: 12px; }
+
+        .rsi-gauge { margin: 4px 0 8px; }
+        .rsi-track { position: relative; height: 28px; border-radius: 6px; overflow: hidden; display: flex; }
+        .rsi-track .zone { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: white; }
+        .rsi-track .z-oversold  { background: #4caf50; width: 30%; }
+        .rsi-track .z-neutral   { background: #ff9800; width: 40%; }
+        .rsi-track .z-overbought{ background: #f44336; width: 30%; }
+        .rsi-needle { position: absolute; top: 0; width: 3px; height: 28px; background: #111; border-radius: 2px; transform: translateX(-50%); transition: left 0.4s ease; }
+        .rsi-scale  { display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-top: 4px; padding: 0 1px; }
+        .rsi-value-label { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+
+        @media (max-width: 768px) {
+            .input-group {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 DCA Assistant</h1>
+            <p>Real-Time Stock Analysis with Volume Profile & Order Flow</p>
+        </div>
+
+        <div class="input-section">
+            <div class="input-group">
+                <div class="input-field">
+                    <label>Stock Ticker</label>
+                    <input type="text" id="ticker" placeholder="e.g., AAPL, MSFT, TSLA" value="AAPL">
+                </div>
+                <div class="input-field">
+                    <label>API Endpoint</label>
+                    <input type="text" id="apiEndpoint" placeholder="http://localhost:3000" value="http://localhost:3000">
+                </div>
+                <button id="analyzeBtn" onclick="analyzeStock()">📈 Analyze</button>
+            </div>
+        </div>
+
+        <div class="content">
+            <div id="error" class="error" style="display: none;"></div>
+            <div id="loading" class="loading" style="display: none;">⏳ Fetching real-time data...</div>
+            <div id="emptyState" class="empty-state">
+                <div class="empty-state-icon">📍</div>
+                <p>Enter a ticker symbol and click "Analyze" to get started</p>
+            </div>
+
+            <div id="results" style="display: none;">
+                <div id="recommendationBox" class="recommendation-box"></div>
+
+                <div class="tabs">
+                    <button class="tab-button active" onclick="switchTab('overview')">Overview</button>
+                    <button class="tab-button" onclick="switchTab('chart')">Chart</button>
+                    <button class="tab-button" onclick="switchTab('technical')">Technical</button>
+                    <button class="tab-button" onclick="switchTab('fundamental')">Fundamental</button>
+                    <button class="tab-button" onclick="switchTab('market')">Market</button>
+                </div>
+
+                <!-- Overview Tab -->
+                <div id="overview" class="tab-content active">
+                    <div class="metrics-grid" id="overviewMetrics"></div>
+                </div>
+
+                <!-- Chart Tab -->
+                <div id="chart" class="tab-content">
+                    <div class="chart-section">
+                        <div class="chart-title">Price &amp; Moving Averages (60 days)</div>
+                        <div class="chart-wrapper"><canvas id="priceChart"></canvas></div>
+                    </div>
+                    <div class="chart-section">
+                        <div class="chart-title">Volume</div>
+                        <div class="chart-wrapper"><canvas id="volumeChart"></canvas></div>
+                    </div>
+                    <div class="chart-section">
+                        <div class="chart-title">RSI (14)</div>
+                        <div class="chart-wrapper">
+                            <div class="rsi-gauge">
+                                <div class="rsi-value-label" id="rsiDisplayVal"></div>
+                                <div class="rsi-track">
+                                    <div class="zone z-oversold">Oversold</div>
+                                    <div class="zone z-neutral">Neutral</div>
+                                    <div class="zone z-overbought">Overbought</div>
+                                    <div class="rsi-needle" id="rsiNeedle"></div>
+                                </div>
+                                <div class="rsi-scale"><span>0</span><span>30</span><span>70</span><span>100</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Technical Tab -->
+                <div id="technical" class="tab-content">
+                    <div class="metrics-grid" id="technicalMetrics"></div>
+                </div>
+
+                <!-- Fundamental Tab -->
+                <div id="fundamental" class="tab-content">
+                    <div class="metrics-grid" id="fundamentalMetrics"></div>
+                </div>
+
+                <!-- Market Tab -->
+                <div id="market" class="tab-content">
+                    <div class="metrics-grid" id="marketMetrics"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            💡 <strong>Tip:</strong> Get your free API key from <a href="https://www.alphavantage.co/api/" target="_blank" style="color: #667eea;">alphavantage.co</a> 
+            and set it as: <code>export ALPHA_VANTAGE_KEY=your_key_here</code>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+        let priceChartInst = null;
+        let volumeChartInst = null;
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        function renderCharts(data) {
+            if (!data.chartData || !data.chartData.length) return;
+
+            const cd = data.chartData;
+            const labels = cd.map(d => d.date.slice(5)); // MM-DD
+            const closes = cd.map(d => d.close);
+            const ma20s  = cd.map(d => d.ma20);
+            const ma50s  = cd.map(d => d.ma50);
+            const vols   = cd.map(d => d.volume);
+            const volColors = cd.map(d => d.bullish ? 'rgba(76,175,80,0.75)' : 'rgba(244,67,54,0.75)');
+
+            if (priceChartInst) priceChartInst.destroy();
+            if (volumeChartInst) volumeChartInst.destroy();
+
+            const chartDefaults = {
+                responsive: true,
+                animation: false,
+                plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } } },
+                interaction: { mode: 'index', intersect: false }
+            };
+
+            priceChartInst = new Chart(document.getElementById('priceChart'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Price',  data: closes, borderColor: '#667eea', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 },
+                        { label: 'MA 20',  data: ma20s,  borderColor: '#ff9800', borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.1, borderDash: [4,2] },
+                        { label: 'MA 50',  data: ma50s,  borderColor: '#2196f3', borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.1, borderDash: [4,2] }
+                    ]
+                },
+                options: { ...chartDefaults, scales: {
+                    x: { ticks: { maxTicksLimit: 10, font: { size: 11 } } },
+                    y: { position: 'right', ticks: { callback: v => '$' + v.toFixed(0) } }
+                }}
+            });
+
+            volumeChartInst = new Chart(document.getElementById('volumeChart'), {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'Volume', data: vols, backgroundColor: volColors }] },
+                options: { ...chartDefaults,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { maxTicksLimit: 10, font: { size: 11 } } },
+                        y: { position: 'right', ticks: { callback: v => v >= 1e6 ? (v/1e6).toFixed(0)+'M' : v } }
+                    }
+                }
+            });
+
+            // RSI gauge
+            const rsi = parseFloat(data.technical.rsi);
+            const color = rsi < 30 ? '#4caf50' : rsi > 70 ? '#f44336' : '#ff9800';
+            const label = rsi < 30 ? 'Oversold' : rsi > 70 ? 'Overbought' : 'Neutral';
+            document.getElementById('rsiDisplayVal').textContent = rsi.toFixed(1) + ' — ' + label;
+            document.getElementById('rsiDisplayVal').style.color = color;
+            document.getElementById('rsiNeedle').style.left = rsi + '%';
+        }
+
+        async function analyzeStock() {
+            const ticker = document.getElementById('ticker').value.toUpperCase();
+            const apiEndpoint = document.getElementById('apiEndpoint').value;
+
+            if (!ticker.trim()) {
+                showError('Please enter a ticker symbol');
+                return;
+            }
+
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('analyzeBtn').disabled = true;
+
+            try {
+                const response = await fetch(`${apiEndpoint}/api/analyze?symbol=${ticker}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    currentData = data;
+                    displayResults(data);
+                    // Show non-critical warnings (e.g., missing API key for fundamentals)
+                    if (data.errors && data.errors.length > 0) {
+                        const infoDiv = document.getElementById('error');
+                        infoDiv.style.background = '#fff8e1';
+                        infoDiv.style.color = '#e65100';
+                        infoDiv.style.borderColor = '#ffa000';
+                        infoDiv.textContent = 'ℹ️ ' + data.errors.join(' | ');
+                        infoDiv.style.display = 'block';
+                    }
+                }
+            } catch (err) {
+                showError(`Failed to connect. Make sure server is running at ${apiEndpoint}`);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('analyzeBtn').disabled = false;
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = `❌ ${message}`;
+            errorDiv.style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'none';
+        }
+
+        function displayResults(data) {
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('emptyState').style.display = 'none';
+            renderCharts(data);
+
+            // Recommendation Box
+            const score = parseFloat(data.analysis.dcaScore);
+            let boxClass = 'hold';
+            if (score >= 70) boxClass = 'strong-buy';
+            else if (score >= 55) boxClass = 'buy';
+            else if (score < 40) boxClass = 'wait';
+
+            document.getElementById('recommendationBox').className = `recommendation-box ${boxClass}`;
+            document.getElementById('recommendationBox').innerHTML = `
+                <div class="recommendation-text">${data.analysis.recommendation}</div>
+                <div class="recommendation-score">
+                    <strong>DCA Score:</strong> ${data.analysis.dcaScore}/100 
+                    | <strong>Last Updated:</strong> ${new Date(data.analysis.timestamp).toLocaleString()}
+                </div>
+            `;
+
+            // Overview Metrics
+            displayMetrics('overview', [
+                { label: 'Current Price', value: `$${data.market.currentPrice}`, icon: '💵' },
+                { label: 'Position (52W)', value: `${data.market.position}%`, icon: '📍' },
+                { label: 'Volume', value: data.market.avgVolume > 40000000 ? 'Strong 📊' : 'Moderate 📊', icon: '📊' },
+                { label: 'Order Flow', value: parseFloat(data.technical.orderFlowDelta) > 0 ? '🟢 Bullish' : '🔴 Bearish', icon: '⚡' }
+            ]);
+
+            // Technical Metrics
+            const fmtVol = v => v >= 1e9 ? `${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1e3 ? `${(v/1e3).toFixed(0)}K` : String(v);
+            displayMetrics('technical', [
+                { label: 'RSI (14)', value: data.technical.rsi, subtext: parseFloat(data.technical.rsi) < 30 ? 'Oversold 🟢' : parseFloat(data.technical.rsi) > 70 ? 'Overbought 🔴' : 'Neutral ⚖️' },
+                { label: 'MA 20', value: `$${data.technical.ma20}` },
+                { label: 'MA 50', value: `$${data.technical.ma50}` },
+                { label: 'POC Price', value: `$${data.technical.pocPrice}`, subtext: 'Volume Peak' },
+                { label: 'Distance to POC', value: `${data.technical.distToPOC}%`, subtext: 'Lower is better' },
+                { label: 'Buy Volume', value: fmtVol(data.technical.buyPressure), subtext: `vs Sell: ${fmtVol(data.technical.sellPressure)}` }
+            ]);
+
+            // Fundamental Metrics
+            const fundContainer = document.getElementById('fundamentalMetrics');
+            if (!data.fundamental) {
+                fundContainer.innerHTML = `<div style="padding:20px;color:#888;grid-column:1/-1;">
+                    ℹ️ Fundamental data unavailable. Set the <code>ALPHA_VANTAGE_KEY</code> environment variable
+                    (free key at <a href="https://www.alphavantage.co/support/#api-key" target="_blank">alphavantage.co</a>)
+                    then restart the server.
+                </div>`;
+            } else {
+                const fund = data.fundamental;
+                const pe = parseFloat(fund.pe);
+                const fpe = parseFloat(fund.forwardPE);
+                const pm = parseFloat(fund.profitMargin);
+                const roe = parseFloat(fund.roe);
+                const mc = parseInt(fund.marketCap);
+                const fmtCap = mc >= 1e12 ? `$${(mc/1e12).toFixed(2)}T` : mc >= 1e9 ? `$${(mc/1e9).toFixed(1)}B` : `$${(mc/1e6).toFixed(0)}M`;
+                displayMetrics('fundamental', [
+                    { label: 'P/E Ratio', value: fund.pe || 'N/A', subtext: !isNaN(pe) ? (pe < 20 ? 'Undervalued ✅' : pe > 30 ? 'Overvalued ⚠️' : 'Fair Value ⚖️') : '' },
+                    { label: 'Forward P/E', value: fund.forwardPE || 'N/A', subtext: !isNaN(fpe) && !isNaN(pe) ? (fpe < pe ? 'Growth expected ✅' : 'Slowing ⚠️') : '' },
+                    { label: 'EPS', value: fund.eps !== 'N/A' ? `$${fund.eps}` : 'N/A', subtext: 'Earnings/share' },
+                    { label: 'ROE', value: !isNaN(roe) ? `${(roe * 100).toFixed(1)}%` : 'N/A', subtext: !isNaN(roe) ? (roe > 0.15 ? 'Strong ✅' : roe > 0.08 ? 'Average ⚖️' : 'Weak ⚠️') : '' },
+                    { label: 'Profit Margin', value: !isNaN(pm) ? `${(pm * 100).toFixed(1)}%` : 'N/A', subtext: !isNaN(pm) ? (pm > 0.20 ? 'Excellent ✅' : pm > 0.10 ? 'Good ⚖️' : 'Thin ⚠️') : '' },
+                    { label: 'Beta', value: fund.beta || 'N/A', subtext: parseFloat(fund.beta) > 1 ? 'High volatility' : 'Low volatility' },
+                    { label: 'Dividend Yield', value: `${fund.dividendYield || '0'}%`, subtext: 'Annual Return' },
+                    { label: 'Market Cap', value: fmtCap, subtext: mc >= 1e12 ? 'Mega Cap' : mc >= 1e11 ? 'Large Cap' : 'Mid Cap' }
+                ]);
+            }
+
+            // Market Metrics
+            displayMetrics('market', [
+                { label: 'Current Price', value: `$${data.market.currentPrice}`, icon: '💵' },
+                { label: '52-Week High', value: `$${data.market.high52Week}`, icon: '📈' },
+                { label: '52-Week Low', value: `$${data.market.low52Week}`, icon: '📉' },
+                { label: 'Avg Daily Volume', value: `${(data.market.avgVolume / 1000000).toFixed(1)}M`, subtext: 'Shares/day' }
+            ]);
+        }
+
+        function displayMetrics(tabId, metrics) {
+            const container = document.getElementById(tabId + 'Metrics');
+            container.innerHTML = metrics.map(m => `
+                <div class="metric-card">
+                    <div class="metric-label">${m.label}</div>
+                    <div class="metric-value">${m.value}</div>
+                    ${m.subtext ? `<div class="metric-subtext">${m.subtext}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Allow Enter key to analyze
+        document.getElementById('ticker').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') analyzeStock();
+        });
+    </script>
+</body>
+</html>

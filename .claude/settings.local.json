@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Out-Null *)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3000/api/analyze?symbol=AAPL\" -UseBasicParsing -TimeoutSec 30 | Select-Object -ExpandProperty Content)",
+      "PowerShell(Get-Job *)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3000/api/analyze?symbol=MSFT\" -UseBasicParsing -TimeoutSec 20 | Select-Object -ExpandProperty Content)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3000/health\" -UseBasicParsing -TimeoutSec 5 | Select-Object -ExpandProperty Content)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(npm root *)",
+      "PowerShell(npm install *)",
+      "PowerShell(cd D:\\\\dca-assistant; $env:PLAYWRIGHT_BROWSERS_PATH = \"$env:USERPROFILE\\\\AppData\\\\Local\\\\ms-playwright\"; npx playwright install chromium 2>&1 | Select-Object -Last 3)",
+      "PowerShell(Get-ChildItem D:\\\\dca-assistant -File | Where-Object { $_.DirectoryName -eq \"D:\\\\dca-assistant\" } | Select-Object Name)",
+      "PowerShell(Get-ChildItem \"D:\\\\dca-assistant\" | Where-Object { -not $_.PSIsContainer } | Select-Object Name)",
+      "PowerShell(cmd /c \"dir D:\\\\dca-assistant /b /a-d\")",
+      "PowerShell(Test-Path *)",
+      "PowerShell(winget install *)",
+      "PowerShell(Set-ExecutionPolicy *)",
+      "PowerShell($env:PATH += \";$env:USERPROFILE\\\\scoop\\\\shims\"; cmd /c \"where git 2>nul\"; & \"$env:USERPROFILE\\\\scoop\\\\shims\\\\git.exe\" --version 2>$null)",
+      "PowerShell(Start-Sleep 4; Invoke-WebRequest -Uri \"http://localhost:3000/health\" -UseBasicParsing -TimeoutSec 5 | Select-Object -ExpandProperty Content)",
+      "PowerShell(git *)",
+      "PowerShell(scoop install *)"
+    ]
+  }
+}

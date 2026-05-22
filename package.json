@@ -1,0 +1,37 @@
+{
+  "name": "dca-assistant",
+  "version": "1.0.0",
+  "description": "Real-time DCA (Dollar-Cost Averaging) Assistant with Volume Profile & Order Flow Analysis",
+  "main": "dca-assistant-server.js",
+  "scripts": {
+    "start": "node dca-assistant-server.js",
+    "dev": "node dca-assistant-server.js",
+    "test": "node -e \"const { analyzeDCA } = require('./dca-assistant-server.js'); analyzeDCA('AAPL').then(r => console.log(JSON.stringify(r, null, 2)))\"",
+    "setup": "npm install && echo 'Get API key from https://www.alphavantage.co/api/'"
+  },
+  "keywords": [
+    "DCA",
+    "dollar-cost-averaging",
+    "stock-analysis",
+    "technical-analysis",
+    "volume-profile",
+    "order-flow",
+    "yahoo-finance",
+    "alpha-vantage"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/dca-assistant"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "recharts": "^2.10.0"
+  }
+}
