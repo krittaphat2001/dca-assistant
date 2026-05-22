@@ -369,8 +369,8 @@
             </div>
         </div>
 
-        <div class="footer">
-            💡 <strong>Tip:</strong> Get your free API key from <a href="https://www.alphavantage.co/api/" target="_blank" style="color: #667eea;">alphavantage.co</a> 
+        <div class="footer" id="apiKeyTip">
+            💡 <strong>Tip:</strong> Get your free API key from <a href="https://www.alphavantage.co/api/" target="_blank" style="color: #667eea;">alphavantage.co</a>
             and set it as: <code>export ALPHA_VANTAGE_KEY=your_key_here</code>
         </div>
     </div>
@@ -500,6 +500,7 @@
         function displayResults(data) {
             document.getElementById('results').style.display = 'block';
             document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('apiKeyTip').style.display = data.fundamental ? 'none' : '';
             renderCharts(data);
 
             // Recommendation Box
