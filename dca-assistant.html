@@ -344,6 +344,52 @@
             font-size: 12px;
         }
 
+        /* ── Explanation paragraph ── */
+        .explanation {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 16px 18px;
+            margin-bottom: 18px;
+            line-height: 1.7;
+            font-size: 14px;
+            color: #444;
+        }
+
+        /* ── Score breakdown bars ── */
+        .score-breakdown { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px; margin-bottom: 18px; }
+        .score-breakdown-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .score-bar-row { margin-bottom: 10px; }
+        .score-bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+        .score-bar-track { background: #e9ecef; border-radius: 4px; height: 9px; }
+        .score-bar-fill { height: 9px; border-radius: 4px; transition: width 0.4s; }
+
+        /* ── Position sizing callout ── */
+        .allocation-box {
+            display: inline-block;
+            text-align: center;
+            background: white;
+            border-radius: 8px;
+            padding: 12px 22px;
+            border: 1px solid currentColor;
+            float: right;
+            margin-left: 16px;
+        }
+        .allocation-pct { font-size: 34px; font-weight: 800; line-height: 1; }
+        .allocation-label { font-size: 11px; color: #888; margin-top: 3px; }
+
+        /* ── Risk flags ── */
+        .risk-flags { background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; padding: 12px 16px; margin-bottom: 18px; font-size: 12px; color: #6d4c0a; }
+        .risk-flags-title { font-weight: 700; margin-bottom: 4px; }
+
+        /* ── Signals table ── */
+        .signal-section { margin-bottom: 22px; }
+        .signal-section-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .signal-table { width: 100%; border-collapse: collapse; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden; font-size: 13px; }
+        .signal-table th { background: #f8f9fa; padding: 8px 12px; text-align: left; font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+        .signal-table td { padding: 9px 12px; border-top: 1px solid #f0f0f0; }
+        .signal-badge { display: inline-block; color: white; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+
         .chart-section { margin-bottom: 24px; }
         .chart-title { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
         .chart-wrapper { position: relative; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; padding: 12px; }
@@ -417,6 +463,7 @@
 
                     <div class="tabs">
                         <button class="tab-button active" onclick="switchTab('overview')">Overview</button>
+                        <button class="tab-button" onclick="switchTab('signals')">Signals</button>
                         <button class="tab-button" onclick="switchTab('chart')">Chart</button>
                         <button class="tab-button" onclick="switchTab('technical')">Technical</button>
                         <button class="tab-button" onclick="switchTab('fundamental')">Fundamental</button>
@@ -426,6 +473,11 @@
                     <!-- Overview Tab -->
                     <div id="overview" class="tab-content active">
                         <div class="metrics-grid" id="overviewMetrics"></div>
+                    </div>
+
+                    <!-- Signals Tab -->
+                    <div id="signals" class="tab-content">
+                        <div id="signalsContent"></div>
                     </div>
 
                     <!-- Chart Tab -->
@@ -665,6 +717,57 @@
             document.getElementById('emptyState').style.display = 'none';
         }
 
+        // ── Helpers ────────────────────────────────────────────────
+        const fmtVol = v => v >= 1e9 ? `${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1e3 ? `${(v/1e3).toFixed(0)}K` : String(v);
+
+        function scoreBarColor(pct) {
+            return pct >= 67 ? '#4caf50' : pct >= 34 ? '#ff9800' : '#f44336';
+        }
+
+        function scoreBar(label, score, max, pct) {
+            const color = scoreBarColor(pct);
+            return `<div class="score-bar-row">
+                <div class="score-bar-label">
+                    <span style="color:#444">${label}</span>
+                    <span style="color:${color};font-weight:700">${score}/${max} (${pct}%)</span>
+                </div>
+                <div class="score-bar-track">
+                    <div class="score-bar-fill" style="width:${pct}%;background:${color}"></div>
+                </div>
+            </div>`;
+        }
+
+        function signalBadge(score, max) {
+            const pct = Math.round(score / max * 100);
+            const color = scoreBarColor(pct);
+            return `<span class="signal-badge" style="background:${color}">${score}/${max}</span>`;
+        }
+
+        function signalRow(label, sig) {
+            if (!sig) return '';
+            const pct = Math.round(sig.score / sig.max * 100);
+            const color = scoreBarColor(pct);
+            return `<tr>
+                <td>${label}</td>
+                <td style="color:${color};font-weight:600">${sig.label}</td>
+                <td style="color:#888;font-family:monospace;font-size:12px">${sig.value || ''}</td>
+                <td style="text-align:center">${signalBadge(sig.score, sig.max)}</td>
+            </tr>`;
+        }
+
+        function signalTable(title, rows) {
+            return `<div class="signal-section">
+                <div class="signal-section-title">${title}</div>
+                <table class="signal-table">
+                    <thead><tr>
+                        <th>Signal</th><th>Reading</th><th>Value</th><th style="text-align:center">Score</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+        }
+
+        // ── Main display ───────────────────────────────────────────
         function displayResults(data) {
             document.getElementById('results').style.display = 'block';
             document.getElementById('emptyState').style.display = 'none';
@@ -672,69 +775,149 @@
             renderCharts(data);
 
             const score = parseFloat(data.analysis.dcaScore);
-            let boxClass = 'hold';
-            if (score >= 70) boxClass = 'strong-buy';
-            else if (score >= 55) boxClass = 'buy';
-            else if (score < 40) boxClass = 'wait';
+            const alloc = data.analysis.allocationPct;
+            const allocColor = alloc >= 75 ? '#4caf50' : alloc >= 50 ? '#2196f3' : alloc >= 25 ? '#ff9800' : '#f44336';
+            let boxClass = score >= 70 ? 'strong-buy' : score >= 55 ? 'buy' : score < 40 ? 'wait' : 'hold';
 
+            // ── Recommendation box ──
             document.getElementById('recommendationBox').className = `recommendation-box ${boxClass}`;
             document.getElementById('recommendationBox').innerHTML = `
-                <div class="recommendation-text">${data.analysis.recommendation}</div>
-                <div class="recommendation-score">
-                    <strong>DCA Score:</strong> ${data.analysis.dcaScore}/100
-                    | <strong>Last Updated:</strong> ${new Date(data.analysis.timestamp).toLocaleString()}
+                <div style="overflow:hidden">
+                    <div class="allocation-box" style="color:${allocColor};border-color:${allocColor}">
+                        <div class="allocation-pct" style="color:${allocColor}">${alloc}%</div>
+                        <div class="allocation-label">deploy this week</div>
+                    </div>
+                    <div class="recommendation-text">${data.analysis.recommendation}</div>
+                    <div class="recommendation-score">
+                        <strong>DCA Score:</strong> ${data.analysis.dcaScore}/100
+                        &nbsp;|&nbsp; <strong>Updated:</strong> ${new Date(data.analysis.timestamp).toLocaleString()}
+                    </div>
                 </div>
             `;
 
+            // ── Explanation ──
+            if (data.analysis.explanation) {
+                const existing = document.getElementById('explanationBox');
+                const el = existing || document.createElement('div');
+                el.id = 'explanationBox';
+                el.className = 'explanation';
+                el.textContent = data.analysis.explanation;
+                if (!existing) document.getElementById('recommendationBox').after(el);
+            }
+
+            // ── Score breakdown bars ──
+            const sb = data.analysis.scoreBreakdown;
+            const breakdownEl = document.getElementById('scoreBreakdownBox') || (() => {
+                const el = document.createElement('div');
+                el.id = 'scoreBreakdownBox';
+                document.getElementById('explanationBox').after(el);
+                return el;
+            })();
+            breakdownEl.className = 'score-breakdown';
+            let barsHtml = `<div class="score-breakdown-title">Score Breakdown</div>`;
+            barsHtml += scoreBar('Technical — RSI, MA trend, POC, order flow, volume, candle', sb.technical.score, sb.technical.max, sb.technical.pct);
+            barsHtml += scoreBar('Market Context — SPY regime, VIX, sector strength', sb.marketContext.score, sb.marketContext.max, sb.marketContext.pct);
+            barsHtml += scoreBar('Price Action — 52W position, drawdown, support', sb.priceAction.score, sb.priceAction.max, sb.priceAction.pct);
+            if (sb.fundamental) {
+                barsHtml += scoreBar('Fundamentals — P/E, ROE, margins, revenue growth', sb.fundamental.score, sb.fundamental.max, sb.fundamental.pct);
+            } else {
+                barsHtml += `<div style="font-size:11px;color:#aaa;margin-top:4px">Fundamental score excluded — set ALPHA_VANTAGE_KEY for +20% weight</div>`;
+            }
+            if (data.analysis.riskFlags && data.analysis.riskFlags.length) {
+                barsHtml += `<div class="risk-flags" style="margin-top:12px;margin-bottom:0">
+                    <div class="risk-flags-title">⚠️ Risk modifiers applied (×${data.analysis.riskModifier})</div>
+                    ${data.analysis.riskFlags.map(f => `<div>• ${f}</div>`).join('')}
+                </div>`;
+            }
+            breakdownEl.innerHTML = barsHtml;
+
+            // ── Overview metrics ──
             displayMetrics('overview', [
-                { label: 'Current Price', value: `$${data.market.currentPrice}` },
-                { label: 'Position (52W)', value: `${data.market.position}%` },
-                { label: 'Volume', value: data.market.avgVolume > 40000000 ? 'Strong 📊' : 'Moderate 📊' },
-                { label: 'Order Flow', value: parseFloat(data.technical.orderFlowDelta) > 0 ? '🟢 Bullish' : '🔴 Bearish' }
+                { label: 'Current Price',  value: `$${data.market.currentPrice}` },
+                { label: 'SPY Regime',     value: data.market.spyRegime, subtext: data.market.spyPrice ? `SPY $${data.market.spyPrice}` : '' },
+                { label: 'VIX',            value: data.market.vixLevel || 'N/A', subtext: data.analysis.signals.vix?.label },
+                { label: 'Drawdown',       value: `-${data.market.drawdownFromHigh}%`, subtext: 'from 52W high' },
+                { label: '52W Position',   value: `${data.market.position}%`, subtext: 'of annual range' },
+                { label: 'Order Flow',     value: data.analysis.signals.orderFlow?.label, subtext: data.analysis.signals.orderFlow?.value }
             ]);
 
-            const fmtVol = v => v >= 1e9 ? `${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1e3 ? `${(v/1e3).toFixed(0)}K` : String(v);
+            // ── Signals tab ──
+            const sig = data.analysis.signals;
+            document.getElementById('signalsContent').innerHTML =
+                signalTable('Technical Signals (max 12 pts)',
+                    signalRow('RSI (14)', sig.rsi) +
+                    signalRow('MA Trend', sig.maTrend) +
+                    signalRow('POC Proximity', sig.poc) +
+                    signalRow('Order Flow', sig.orderFlow) +
+                    signalRow('Volume Confirmation', sig.volumeConfirm) +
+                    signalRow('Candlestick', sig.candle)
+                ) +
+                signalTable('Market Context Signals (max 6 pts)',
+                    signalRow('SPY Regime', sig.spyRegime) +
+                    signalRow('VIX (Fear Gauge)', sig.vix) +
+                    signalRow('Sector Strength', sig.sectorStrength)
+                ) +
+                signalTable('Price Action Signals (max 6 pts)',
+                    signalRow('52W Position', sig.position52) +
+                    signalRow('Drawdown from High', sig.drawdown) +
+                    signalRow('Support Level', sig.support)
+                );
+
+            // ── Technical metrics ──
+            const cp = parseFloat(data.market.currentPrice);
             displayMetrics('technical', [
-                { label: 'RSI (14)', value: data.technical.rsi, subtext: parseFloat(data.technical.rsi) < 30 ? 'Oversold 🟢' : parseFloat(data.technical.rsi) > 70 ? 'Overbought 🔴' : 'Neutral ⚖️' },
-                { label: 'MA 20', value: `$${data.technical.ma20}` },
-                { label: 'MA 50', value: `$${data.technical.ma50}` },
-                { label: 'POC Price', value: `$${data.technical.pocPrice}`, subtext: 'Volume Peak' },
-                { label: 'Distance to POC', value: `${data.technical.distToPOC}%`, subtext: 'Lower is better' },
-                { label: 'Buy Volume', value: fmtVol(data.technical.buyPressure), subtext: `vs Sell: ${fmtVol(data.technical.sellPressure)}` }
+                { label: 'RSI (14)',          value: data.technical.rsi, subtext: parseFloat(data.technical.rsi) < 30 ? 'Oversold 🟢' : parseFloat(data.technical.rsi) > 70 ? 'Overbought 🔴' : 'Neutral ⚖️' },
+                { label: 'MA 20',             value: `$${data.technical.ma20}`, subtext: cp > parseFloat(data.technical.ma20) ? '↑ Price above' : '↓ Price below' },
+                { label: 'MA 50',             value: `$${data.technical.ma50}`, subtext: cp > parseFloat(data.technical.ma50) ? '↑ Price above' : '↓ Price below' },
+                { label: 'MA 200',            value: `$${data.technical.ma200}`, subtext: cp > parseFloat(data.technical.ma200) ? '↑ Price above' : '↓ Price below' },
+                { label: 'POC Price',         value: `$${data.technical.pocPrice}`, subtext: `${data.technical.distToPOC}% away` },
+                { label: 'Nearest Support',   value: data.technical.nearestSupport ? `$${data.technical.nearestSupport}` : 'N/A', subtext: sig.support?.label },
+                { label: 'Candlestick',       value: data.technical.candlestickPattern ? data.technical.candlestickPattern.replace('_',' ') : 'No pattern' },
+                { label: 'Day Streak',        value: data.technical.streak ? `${data.technical.streak.streak} ${data.technical.streak.direction === 'up' ? '↑' : '↓'}` : 'N/A', subtext: data.technical.streak?.direction === 'down' ? 'Consecutive down' : 'Consecutive up' },
+                { label: 'Buy Volume',        value: fmtVol(data.technical.buyPressure), subtext: `Sell: ${fmtVol(data.technical.sellPressure)}` }
             ]);
 
+            // ── Fundamental metrics ──
             const fundContainer = document.getElementById('fundamentalMetrics');
             if (!data.fundamental) {
-                fundContainer.innerHTML = `<div style="padding:20px;color:#888;grid-column:1/-1;">
-                    ℹ️ Fundamental data unavailable. Set the <code>ALPHA_VANTAGE_KEY</code> environment variable
-                    (free key at <a href="https://www.alphavantage.co/support/#api-key" target="_blank">alphavantage.co</a>)
-                    then restart the server.
+                fundContainer.innerHTML = `<div style="padding:24px;color:#888;grid-column:1/-1;text-align:center">
+                    ℹ️ Set <code>ALPHA_VANTAGE_KEY</code> environment variable and restart the server.<br>
+                    Free key at <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:#667eea">alphavantage.co</a>
                 </div>`;
             } else {
                 const fund = data.fundamental;
-                const pe = parseFloat(fund.pe);
-                const fpe = parseFloat(fund.forwardPE);
-                const pm = parseFloat(fund.profitMargin);
-                const roe = parseFloat(fund.roe);
+                const pe = parseFloat(fund.pe), fpe = parseFloat(fund.forwardPE);
+                const pm = parseFloat(fund.profitMargin), roe = parseFloat(fund.roe);
                 const mc = parseInt(fund.marketCap);
                 const fmtCap = mc >= 1e12 ? `$${(mc/1e12).toFixed(2)}T` : mc >= 1e9 ? `$${(mc/1e9).toFixed(1)}B` : `$${(mc/1e6).toFixed(0)}M`;
                 displayMetrics('fundamental', [
-                    { label: 'P/E Ratio', value: fund.pe || 'N/A', subtext: !isNaN(pe) ? (pe < 20 ? 'Undervalued ✅' : pe > 30 ? 'Overvalued ⚠️' : 'Fair Value ⚖️') : '' },
-                    { label: 'Forward P/E', value: fund.forwardPE || 'N/A', subtext: !isNaN(fpe) && !isNaN(pe) ? (fpe < pe ? 'Growth expected ✅' : 'Slowing ⚠️') : '' },
-                    { label: 'EPS', value: fund.eps !== 'N/A' ? `$${fund.eps}` : 'N/A', subtext: 'Earnings/share' },
-                    { label: 'ROE', value: !isNaN(roe) ? `${(roe * 100).toFixed(1)}%` : 'N/A', subtext: !isNaN(roe) ? (roe > 0.15 ? 'Strong ✅' : roe > 0.08 ? 'Average ⚖️' : 'Weak ⚠️') : '' },
-                    { label: 'Profit Margin', value: !isNaN(pm) ? `${(pm * 100).toFixed(1)}%` : 'N/A', subtext: !isNaN(pm) ? (pm > 0.20 ? 'Excellent ✅' : pm > 0.10 ? 'Good ⚖️' : 'Thin ⚠️') : '' },
-                    { label: 'Beta', value: fund.beta || 'N/A', subtext: parseFloat(fund.beta) > 1 ? 'High volatility' : 'Low volatility' },
-                    { label: 'Dividend Yield', value: `${fund.dividendYield || '0'}%`, subtext: 'Annual Return' },
-                    { label: 'Market Cap', value: fmtCap, subtext: mc >= 1e12 ? 'Mega Cap' : mc >= 1e11 ? 'Large Cap' : 'Mid Cap' }
+                    { label: 'Sector',              value: fund.sector || 'N/A' },
+                    { label: 'P/E Ratio',           value: fund.pe, subtext: !isNaN(pe) ? (pe < 20 ? 'Attractive ✅' : pe > 30 ? 'Elevated ⚠️' : 'Fair ⚖️') : '' },
+                    { label: 'Forward P/E',         value: fund.forwardPE, subtext: !isNaN(fpe) && !isNaN(pe) ? (fpe < pe ? 'Growth expected ✅' : 'Slowing ⚠️') : '' },
+                    { label: 'EPS',                 value: fund.eps !== 'N/A' ? `$${fund.eps}` : 'N/A', subtext: 'Earnings per share' },
+                    { label: 'ROE',                 value: fund.roe, subtext: !isNaN(roe) ? (roe > 0.15 ? 'Strong ✅' : roe > 0.08 ? 'Average ⚖️' : 'Weak ⚠️') : '' },
+                    { label: 'Profit Margin',       value: fund.profitMargin, subtext: !isNaN(pm) ? (pm > 0.20 ? 'Excellent ✅' : pm > 0.10 ? 'Good ⚖️' : 'Thin ⚠️') : '' },
+                    { label: 'Revenue Growth YOY',  value: fund.revenueGrowthYOY, subtext: 'Quarterly YOY' },
+                    { label: 'Earnings Growth YOY', value: fund.earningsGrowthYOY, subtext: 'Quarterly YOY' },
+                    { label: 'Beta',                value: fund.beta, subtext: parseFloat(fund.beta) > 1.5 ? 'High volatility ⚠️' : parseFloat(fund.beta) > 1 ? 'Above average' : 'Stable' },
+                    { label: 'Dividend Yield',      value: fund.dividendYield, subtext: 'Annual income' },
+                    { label: 'Price / Book',        value: fund.priceToBook },
+                    { label: 'Market Cap',          value: fmtCap, subtext: mc >= 1e12 ? 'Mega Cap' : mc >= 1e11 ? 'Large Cap' : 'Mid Cap' }
                 ]);
             }
 
+            // ── Market metrics ──
             displayMetrics('market', [
-                { label: 'Current Price', value: `$${data.market.currentPrice}` },
-                { label: '52-Week High', value: `$${data.market.high52Week}` },
-                { label: '52-Week Low', value: `$${data.market.low52Week}` },
-                { label: 'Avg Daily Volume', value: `${(data.market.avgVolume / 1000000).toFixed(1)}M`, subtext: 'Shares/day' }
+                { label: 'Current Price',    value: `$${data.market.currentPrice}` },
+                { label: '52W High',         value: `$${data.market.high52Week}` },
+                { label: '52W Low',          value: `$${data.market.low52Week}` },
+                { label: '52W Position',     value: `${data.market.position}%`, subtext: 'of annual range' },
+                { label: 'Drawdown',         value: `-${data.market.drawdownFromHigh}%`, subtext: 'from 52W high' },
+                { label: 'MA 200',           value: `$${data.market.ma200}`, subtext: parseFloat(data.market.currentPrice) > parseFloat(data.market.ma200) ? '↑ Price above' : '↓ Price below' },
+                { label: 'SPY Regime',       value: data.market.spyRegime, subtext: data.market.spyPrice ? `SPY $${data.market.spyPrice}` : '' },
+                { label: 'VIX',              value: data.market.vixLevel || 'N/A', subtext: data.analysis.signals.vix?.label },
+                { label: 'Sector ETF',       value: data.market.sectorEtf || 'N/A', subtext: data.analysis.signals.sectorStrength?.label },
+                { label: 'Avg Daily Volume', value: `${(data.market.avgVolume / 1e6).toFixed(1)}M` }
             ]);
         }
 
@@ -743,7 +926,7 @@
             container.innerHTML = metrics.map(m => `
                 <div class="metric-card">
                     <div class="metric-label">${m.label}</div>
-                    <div class="metric-value">${m.value}</div>
+                    <div class="metric-value">${m.value ?? 'N/A'}</div>
                     ${m.subtext ? `<div class="metric-subtext">${m.subtext}</div>` : ''}
                 </div>
             `).join('');
