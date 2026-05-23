@@ -1,6 +1,7 @@
 /**
- * DCA Assistant - Real-Time Stock Analysis Server
- * Uses Yahoo Finance chart API (no auth) + Alpha Vantage (optional key for fundamentals)
+ * DCA Assistant v3.0 - Enhanced Real-Time Stock Analysis Server
+ * Technical + Market Context + Price Action + Fundamental scoring
+ * Data: Yahoo Finance (no auth) + Alpha Vantage (optional, for fundamentals)
  */
 
 const http = require('http');
@@ -11,40 +12,45 @@ function loadConfig() {
   const base = { port: 3000, alphaVantageKey: process.env.ALPHA_VANTAGE_KEY || 'demo' };
   try {
     const file = require('fs').readFileSync(require('path').join(__dirname, 'config.json'), 'utf8');
-    const saved = JSON.parse(file);
-    return { ...base, ...saved };
-  } catch {
-    return base;
-  }
+    return { ...base, ...JSON.parse(file) };
+  } catch { return base; }
 }
 
 const CONFIG = loadConfig();
-
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-// Helper: Make HTTPS GET request
+// Map tickers to their sector ETF for relative strength comparison
+const SECTOR_ETF = {
+  AAPL:'XLK',MSFT:'XLK',GOOGL:'XLK',GOOG:'XLK',META:'XLK',NVDA:'XLK',AMD:'XLK',
+  INTC:'XLK',CRM:'XLK',ORCL:'XLK',QCOM:'XLK',TXN:'XLK',AVGO:'XLK',
+  JPM:'XLF',BAC:'XLF',WFC:'XLF',GS:'XLF',MS:'XLF',C:'XLF',
+  JNJ:'XLV',PFE:'XLV',MRNA:'XLV',ABBV:'XLV',UNH:'XLV',MRK:'XLV',LLY:'XLV',
+  XOM:'XLE',CVX:'XLE',COP:'XLE',OXY:'XLE',SLB:'XLE',
+  AMZN:'XLY',TSLA:'XLY',NKE:'XLY',MCD:'XLY',SBUX:'XLY',TGT:'XLY',HD:'XLY',
+  PG:'XLP',KO:'XLP',PEP:'XLP',WMT:'XLP',COST:'XLP',
+  BA:'XLI',CAT:'XLI',GE:'XLI',HON:'XLI',UPS:'XLI',RTX:'XLI',
+  NEE:'XLU',DUK:'XLU',SO:'XLU',AEP:'XLU',
+  AMT:'XLRE',PLD:'XLRE',O:'XLRE',
+  LIN:'XLB',APD:'XLB',NEM:'XLB',FCX:'XLB',
+  VZ:'XLC',T:'XLC',NFLX:'XLC',DIS:'XLC',CMCSA:'XLC',
+};
+
+// ─── HTTP helper ────────────────────────────────────────────────────────────
+
 function makeRequest(urlString) {
   return new Promise((resolve, reject) => {
     const urlObj = new url.URL(urlString);
     const req = https.get({
-      hostname: urlObj.hostname,
-      port: 443,
+      hostname: urlObj.hostname, port: 443,
       path: urlObj.pathname + urlObj.search,
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9'
-      },
+      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json, */*', 'Accept-Language': 'en-US,en;q=0.9' },
       maxHeaderSize: 32768
     }, (res) => {
       let data = '';
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (e) {
-          reject(new Error(`Failed to parse response from ${urlObj.hostname}: ${e.message}`));
-        }
+        try { resolve(JSON.parse(data)); }
+        catch (e) { reject(new Error(`Parse error from ${urlObj.hostname}: ${e.message}`)); }
       });
     });
     req.setTimeout(15000, () => req.destroy(new Error('Request timeout')));
@@ -52,70 +58,167 @@ function makeRequest(urlString) {
   });
 }
 
-// Fetch market + technical data from Yahoo Finance chart API (no authentication needed)
+// ─── Technical indicators ────────────────────────────────────────────────────
+
+function calculateRSI(prices, period = 14) {
+  if (prices.length < period + 1) return 50;
+  const changes = prices.slice(1).map((p, i) => p - prices[i]);
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 0; i < period; i++) {
+    if (changes[i] > 0) avgGain += changes[i];
+    else avgLoss += Math.abs(changes[i]);
+  }
+  avgGain /= period; avgLoss /= period;
+  for (let i = period; i < changes.length; i++) {
+    avgGain = (avgGain * (period - 1) + Math.max(0, changes[i])) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(0, -changes[i])) / period;
+  }
+  if (avgLoss === 0) return 100;
+  return 100 - 100 / (1 + avgGain / avgLoss);
+}
+
+// Detects the most significant pattern on the last two bars (chronological array)
+function detectCandlestickPattern(ohlcv) {
+  if (ohlcv.length < 2) return null;
+  const curr = ohlcv[ohlcv.length - 1];
+  const prev = ohlcv[ohlcv.length - 2];
+  const body = Math.abs(curr.close - curr.open);
+  const range = curr.high - curr.low;
+  if (range === 0) return null;
+  const lowerWick = Math.min(curr.open, curr.close) - curr.low;
+  const upperWick = curr.high - Math.max(curr.open, curr.close);
+
+  if (body / range < 0.1) return 'doji';
+  if (curr.close > curr.open && prev.close < prev.open &&
+      curr.open < prev.close && curr.close > prev.open) return 'bullish_engulfing';
+  if (curr.close < curr.open && prev.close > prev.open &&
+      curr.open > prev.close && curr.close < prev.open) return 'bearish_engulfing';
+  if (lowerWick > 2 * body && upperWick < body && curr.close > curr.open) return 'hammer';
+  return null;
+}
+
+// Finds the nearest swing-low support below current price in OHLCV array
+function findNearestSupport(ohlcv, currentPrice) {
+  if (ohlcv.length < 5) return null;
+  const swingLows = [];
+  for (let i = 2; i < ohlcv.length - 2; i++) {
+    const lo = ohlcv[i].low;
+    if (lo < ohlcv[i-1].low && lo < ohlcv[i-2].low &&
+        lo < ohlcv[i+1].low && lo < ohlcv[i+2].low) {
+      swingLows.push(lo);
+    }
+  }
+  const below = swingLows.filter(l => l <= currentPrice);
+  return below.length ? Math.max(...below) : null;
+}
+
+// Returns { streak, direction } — how many consecutive same-direction days
+function countConsecutiveDays(ohlcv) {
+  if (ohlcv.length < 2) return { streak: 0, direction: 'neutral' };
+  const recent = [...ohlcv].reverse();
+  const firstUp = recent[0].close > recent[0].open;
+  let streak = 0;
+  for (const d of recent) {
+    if ((d.close > d.open) === firstUp) streak++;
+    else break;
+  }
+  return { streak, direction: firstUp ? 'up' : 'down' };
+}
+
+// Volume confirmation: ratio of up-day volume in last 10 bars → 0/1/2 pts
+function scoreVolumeConfirmation(ohlcv) {
+  const recent = ohlcv.slice(-10);
+  const upVol = recent.filter(d => d.close >= d.open).reduce((s, d) => s + d.volume, 0);
+  const total = recent.reduce((s, d) => s + d.volume, 0);
+  if (total === 0) return 0;
+  const ratio = upVol / total;
+  return ratio > 0.65 ? 2 : ratio > 0.50 ? 1 : 0;
+}
+
+// ─── Data fetchers ────────────────────────────────────────────────────────────
+
+// Lightweight fetch for SPY, VIX, sector ETF — only needs price + MAs + 20-day return
+async function fetchQuickChartData(symbol) {
+  const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo&includePrePost=false`;
+  const data = await makeRequest(chartUrl);
+  if (!data.chart?.result?.length) return null;
+  const quotes = data.chart.result[0].indicators.quote[0];
+  const closes = (data.chart.result[0].timestamp || [])
+    .map((_, i) => quotes.close[i])
+    .filter(c => c != null);
+  if (!closes.length) return null;
+  const currentPrice = closes[closes.length - 1];
+  const ma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, closes.length);
+  const ma50 = closes.slice(-50).reduce((a, b) => a + b, 0) / Math.min(50, closes.length);
+  const ret20 = closes.length >= 21
+    ? (currentPrice - closes[closes.length - 21]) / closes[closes.length - 21]
+    : 0;
+  return { symbol, currentPrice, ma20, ma50, ret20 };
+}
+
+// Full chart data for the analyzed stock
 async function fetchYahooChartData(symbol) {
   console.log(`📊 Fetching Yahoo Finance chart data for ${symbol}...`);
-
   const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6mo&includePrePost=false`;
   const data = await makeRequest(chartUrl);
-
   if (!data.chart?.result?.length) {
-    const errMsg = data.chart?.error?.description || 'Symbol not found or data unavailable';
-    throw new Error(errMsg);
+    throw new Error(data.chart?.error?.description || 'Symbol not found or data unavailable');
   }
-
   const result = data.chart.result[0];
   const meta = result.meta;
   const quotes = result.indicators.quote[0];
   const timestamps = result.timestamp || [];
 
-  // Build OHLCV array, filtering out null entries (market holidays)
   const ohlcv = timestamps
     .map((ts, i) => ({
       date: new Date(ts * 1000).toISOString().split('T')[0],
-      open: quotes.open[i],
-      high: quotes.high[i],
-      low: quotes.low[i],
-      close: quotes.close[i],
-      volume: quotes.volume[i]
+      open: quotes.open[i], high: quotes.high[i],
+      low: quotes.low[i], close: quotes.close[i], volume: quotes.volume[i]
     }))
     .filter(d => d.close != null && d.volume != null);
 
-  if (ohlcv.length === 0) throw new Error('No trading data available');
+  if (!ohlcv.length) throw new Error('No trading data available');
 
-  // Most recent first
-  const recent = [...ohlcv].reverse();
+  const recent = [...ohlcv].reverse(); // most-recent first
   const last20 = recent.slice(0, 20);
 
-  // Order flow: days where close > open are net buying
-  let totalBuyVolume = 0;
-  let totalSellVolume = 0;
+  // Order flow
+  let totalBuyVolume = 0, totalSellVolume = 0;
   for (const d of last20) {
     if (d.close > d.open) totalBuyVolume += d.volume;
     else totalSellVolume += d.volume;
   }
 
-  // POC = bar with highest volume in last 20 days
   const pocData = [...last20].sort((a, b) => b.volume - a.volume)[0];
+  const closes = recent.map(d => d.close); // most-recent first
 
-  // Moving averages (recent-first array)
-  const closes = recent.map(d => d.close);
   const ma20 = closes.slice(0, Math.min(20, closes.length)).reduce((a, b) => a + b, 0) / Math.min(20, closes.length);
   const ma50 = closes.slice(0, Math.min(50, closes.length)).reduce((a, b) => a + b, 0) / Math.min(50, closes.length);
-
-  // RSI needs chronological order (oldest first)
+  const ma200 = closes.slice(0, Math.min(200, closes.length)).reduce((a, b) => a + b, 0) / Math.min(200, closes.length);
   const rsi = calculateRSI([...closes].reverse(), 14);
-
   const avgVolume = Math.round(last20.reduce((a, d) => a + d.volume, 0) / last20.length);
 
-  // Chart data: last 60 days with per-day rolling MA20 / MA50
-  const allCloses = ohlcv.map(d => d.close); // chronological
+  const currentPrice = meta.regularMarketPrice;
+  const high52Week = meta.fiftyTwoWeekHigh || Math.max(...ohlcv.map(d => d.high));
+  const low52Week = meta.fiftyTwoWeekLow || Math.min(...ohlcv.map(d => d.low));
+  const drawdownFromHigh = ((high52Week - currentPrice) / high52Week) * 100;
+
+  const nearestSupport = findNearestSupport(ohlcv, currentPrice);
+  const streak = countConsecutiveDays(ohlcv);
+  const candlestickPattern = detectCandlestickPattern(ohlcv);
+  const volConfirmScore = scoreVolumeConfirmation(ohlcv);
+  const ret20 = ohlcv.length >= 21
+    ? (currentPrice - ohlcv[ohlcv.length - 21].close) / ohlcv[ohlcv.length - 21].close
+    : 0;
+
+  // Chart data: last 60 days with rolling MA lines
+  const allCloses = ohlcv.map(d => d.close);
   const chartCount = Math.min(60, ohlcv.length);
   const chartStart = ohlcv.length - chartCount;
   const chartData = ohlcv.slice(chartStart).map((d, i) => {
-    const absIdx = chartStart + i;
-    const s20 = allCloses.slice(Math.max(0, absIdx - 19), absIdx + 1);
-    const s50 = allCloses.slice(Math.max(0, absIdx - 49), absIdx + 1);
+    const idx = chartStart + i;
+    const s20 = allCloses.slice(Math.max(0, idx - 19), idx + 1);
+    const s50 = allCloses.slice(Math.max(0, idx - 49), idx + 1);
     return {
       date: d.date,
       close: parseFloat(d.close.toFixed(2)),
@@ -127,234 +230,467 @@ async function fetchYahooChartData(symbol) {
   });
 
   return {
-    symbol,
-    currentPrice: meta.regularMarketPrice,
-    high52Week: meta.fiftyTwoWeekHigh,
-    low52Week: meta.fiftyTwoWeekLow,
-    avgVolume,
-    volumeData: last20,
-    pocPrice: pocData.close,
-    pocVolume: pocData.volume,
-    buyVolume: totalBuyVolume,
-    sellVolume: totalSellVolume,
+    symbol, currentPrice,
+    high52Week, low52Week,
+    avgVolume, pocPrice: pocData.close, pocVolume: pocData.volume,
+    buyVolume: totalBuyVolume, sellVolume: totalSellVolume,
     orderFlowDelta: totalBuyVolume - totalSellVolume,
-    ma20: ma20.toFixed(2),
-    ma50: ma50.toFixed(2),
+    ma20Raw: ma20, ma50Raw: ma50, ma200Raw: ma200,
+    ma20: ma20.toFixed(2), ma50: ma50.toFixed(2), ma200: ma200.toFixed(2),
     rsi: rsi.toFixed(2),
+    drawdownFromHigh: drawdownFromHigh.toFixed(2),
+    candlestickPattern,
+    nearestSupport: nearestSupport ? nearestSupport.toFixed(2) : null,
+    streak, volConfirmScore, ret20,
     chartData,
     timestamp: new Date().toISOString()
   };
 }
 
-// Fetch fundamental data from Alpha Vantage OVERVIEW endpoint (requires real API key)
 async function fetchAlphaVantageFundamentals(symbol) {
   const apiKey = CONFIG.alphaVantageKey;
-  if (apiKey === 'demo') {
-    throw new Error('Set ALPHA_VANTAGE_KEY env var for fundamental data (free at alphavantage.co)');
-  }
-
+  if (apiKey === 'demo') throw new Error('Set ALPHA_VANTAGE_KEY env var for fundamental data (free at alphavantage.co)');
   console.log(`📈 Fetching Alpha Vantage fundamentals for ${symbol}...`);
-
-  const overviewUrl = `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${apiKey}`;
-  const data = await makeRequest(overviewUrl);
-
-  if (data.Note || data.Information) {
-    throw new Error('Alpha Vantage API rate limit reached. Try again in 1 minute.');
-  }
-
-  if (!data.Symbol) {
-    throw new Error('Symbol not found in Alpha Vantage');
-  }
-
+  const data = await makeRequest(`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${apiKey}`);
+  if (data.Note || data.Information) throw new Error('Alpha Vantage rate limit. Try again in 1 minute.');
+  if (!data.Symbol) throw new Error('Symbol not found in Alpha Vantage');
   return {
     pe: parseFloat(data.PERatio) || null,
     forwardPE: parseFloat(data.ForwardPE) || null,
     eps: parseFloat(data.EPS) || null,
     roe: parseFloat(data.ReturnOnEquityTTM) || null,
     profitMargin: parseFloat(data.ProfitMargin) || null,
+    revenueGrowthYOY: parseFloat(data.QuarterlyRevenueGrowthYOY) || null,
+    earningsGrowthYOY: parseFloat(data.QuarterlyEarningsGrowthYOY) || null,
     beta: parseFloat(data.Beta) || null,
     dividendYield: parseFloat(data.DividendYield) || 0,
-    marketCap: parseInt(data.MarketCapitalization) || 0
+    marketCap: parseInt(data.MarketCapitalization) || 0,
+    priceToBook: parseFloat(data.PriceToBookRatio) || null,
+    sector: data.Sector || null
   };
 }
 
-// RSI Calculation (prices must be in chronological order, oldest first)
-function calculateRSI(prices, period = 14) {
-  if (prices.length < period + 1) return 50;
+// ─── Natural-language explanation ────────────────────────────────────────────
 
-  const changes = [];
-  for (let i = 1; i < prices.length; i++) {
-    changes.push(prices[i] - prices[i - 1]);
+function generateExplanation(symbol, rec, dcaScore, allocationPct, signals, scoreBreakdown, market, riskFlags, fundamentalData) {
+  const cp = parseFloat(market.currentPrice);
+  const rsi = parseFloat(signals.rsi?.value);
+  const drawdown = parseFloat(market.drawdownFromHigh);
+  const position52 = parseInt(market.position);
+
+  // Collect bullish and bearish points from signals
+  const bullish = [];
+  const bearish = [];
+
+  // Technical
+  if (signals.maTrend?.score === 2) bullish.push('a golden cross (MA20 above MA50 with price above both, confirming an uptrend)');
+  else if (signals.maTrend?.score === 0) bearish.push('a downtrend (price below both MA20 and MA50)');
+
+  if (signals.rsi?.score === 2) bullish.push(`an oversold RSI of ${rsi} suggesting the recent selloff may be overdone`);
+  else if (signals.rsi?.score === 0 && rsi > 70) bearish.push(`an overbought RSI of ${rsi} indicating the stock is extended and due for a pullback`);
+
+  if (signals.orderFlow?.score === 2) bullish.push(`net buying pressure over the last 20 sessions (delta: ${signals.orderFlow.value})`);
+  else bearish.push(`net selling pressure over the last 20 sessions (delta: ${signals.orderFlow?.value})`);
+
+  if (signals.poc?.score >= 1) bullish.push(`price trading ${signals.poc.value} from its highest-volume price level (Point of Control)`);
+  else bearish.push(`price far (${signals.poc?.value}) from its key volume concentration level`);
+
+  if (signals.volumeConfirm?.score === 2) bullish.push('above-average volume on up days, confirming buyer conviction');
+  else if (signals.volumeConfirm?.score === 0) bearish.push('heavier volume on down days than up days, suggesting distribution');
+
+  if (signals.candle?.score === 2) bullish.push(`a ${signals.candle.label} candlestick pattern at the current level`);
+  else if (signals.candle?.label === 'bearish engulfing') bearish.push('a bearish engulfing candle signaling potential reversal to the downside');
+
+  // Market context
+  if (signals.spyRegime?.score === 2) bullish.push('the broad market (SPY) in a confirmed uptrend above its 50-day average');
+  else if (signals.spyRegime?.score === 0) bearish.push('the broad market (SPY) in a downtrend — macro headwinds reduce the probability of any individual stock recovering');
+
+  if (signals.vix?.score === 2) bullish.push(`elevated market fear (VIX ${signals.vix.value}) historically creating good DCA entry points`);
+  else if (signals.vix?.score === 0) bearish.push(`low market fear (VIX ${signals.vix.value}) suggesting complacency — little margin of safety is priced in`);
+
+  if (signals.sectorStrength?.score === 2) bullish.push(`outperformance versus its sector ETF (${signals.sectorStrength.value}) showing relative strength`);
+  else if (signals.sectorStrength?.score === 0) bearish.push(`underperformance versus its sector ETF (${signals.sectorStrength.value}), which may indicate stock-specific weakness`);
+
+  // Price action
+  if (drawdown > 20) bullish.push(`a meaningful ${drawdown.toFixed(1)}% discount from its 52-week high, offering value for long-term DCA buyers`);
+  else if (drawdown < 5) bearish.push(`trading within ${drawdown.toFixed(1)}% of its 52-week high — near the top of the range with limited margin of safety`);
+
+  if (signals.support?.score >= 1) bullish.push(`price near a known swing-low support at ${signals.support.value}`);
+
+  if (position52 < 33) bullish.push(`sitting in the lower third of its 52-week range ($${market.low52Week}–$${market.high52Week})`);
+  else if (position52 > 66) bearish.push(`in the upper third of its 52-week range ($${market.low52Week}–$${market.high52Week}), limiting near-term upside`);
+
+  // Fundamentals
+  if (fundamentalData) {
+    if (fundamentalData.revenueGrowthYOY && fundamentalData.revenueGrowthYOY !== 'N/A') {
+      const growth = parseFloat(fundamentalData.revenueGrowthYOY);
+      if (!isNaN(growth)) {
+        if (growth > 10) bullish.push(`strong year-over-year revenue growth of ${fundamentalData.revenueGrowthYOY}`);
+        else if (growth < 0) bearish.push(`declining revenue (${fundamentalData.revenueGrowthYOY} YOY), which undermines the fundamental case`);
+      }
+    }
+    if (fundamentalData.pe && fundamentalData.pe !== 'N/A') {
+      const pe = parseFloat(fundamentalData.pe);
+      if (!isNaN(pe) && pe < 20) bullish.push(`an attractive P/E of ${fundamentalData.pe}x`);
+      else if (!isNaN(pe) && pe > 30) bearish.push(`a high P/E of ${fundamentalData.pe}x leaving little room for earnings disappointment`);
+    }
   }
 
-  let avgGain = 0;
-  let avgLoss = 0;
-  for (let i = 0; i < period; i++) {
-    if (changes[i] > 0) avgGain += changes[i];
-    else avgLoss += Math.abs(changes[i]);
-  }
-  avgGain /= period;
-  avgLoss /= period;
+  // Risk flags sentence
+  const riskSentence = riskFlags?.length
+    ? ` Note that the score has been discounted because: ${riskFlags.join('; ')}.`
+    : '';
 
-  for (let i = period; i < changes.length; i++) {
-    const gain = changes[i] > 0 ? changes[i] : 0;
-    const loss = changes[i] < 0 ? Math.abs(changes[i]) : 0;
-    avgGain = (avgGain * (period - 1) + gain) / period;
-    avgLoss = (avgLoss * (period - 1) + loss) / period;
+  // Build the paragraph
+  const topBullish = bullish.slice(0, 3);
+  const topBearish = bearish.slice(0, 3);
+
+  let para = '';
+
+  if (rec.includes('STRONG BUY')) {
+    para = `${symbol} presents a compelling DCA entry at $${cp.toFixed(2)}, scoring ${dcaScore}/100 across technical, market, and price action factors. `;
+    if (topBullish.length) para += `The case for buying is supported by ${topBullish.join(', ')}. `;
+    if (topBearish.length) para += `The main risks to monitor are ${topBearish.join(' and ')}. `;
+    para += `At this score, deploying the full planned DCA amount this period is justified.`;
+  } else if (rec.includes('BUY')) {
+    para = `${symbol} shows a favorable but not exceptional setup at $${cp.toFixed(2)}, scoring ${dcaScore}/100. `;
+    if (topBullish.length) para += `On the positive side: ${topBullish.join(', ')}. `;
+    if (topBearish.length) para += `However, ${topBearish.join(' and ')} temper the conviction. `;
+    para += `Deploying ${allocationPct}% of your planned amount this period is reasonable — saving the remainder for a better entry if conditions improve.`;
+  } else if (rec.includes('HOLD')) {
+    para = `${symbol} is in a mixed state at $${cp.toFixed(2)}, scoring ${dcaScore}/100 — not an ideal DCA entry, but not a clear stay-away either. `;
+    if (topBearish.length) para += `The primary concerns are ${topBearish.join(' and ')}, which reduce confidence in an immediate move higher. `;
+    if (topBullish.length) para += `On the other hand, ${topBullish.slice(0,2).join(' and ')} keep the longer-term thesis intact. `;
+    para += `Consider deploying only ${allocationPct}% of your planned amount now and waiting for a better technical setup — a pullback toward support or an RSI reset — before adding more.`;
+  } else {
+    para = `${symbol} is not offering a favorable DCA entry at $${cp.toFixed(2)}, scoring just ${dcaScore}/100. `;
+    if (topBearish.length) para += `Multiple factors are working against it: ${topBearish.join(', ')}. `;
+    if (topBullish.length) para += `${topBullish[0].charAt(0).toUpperCase() + topBullish[0].slice(1)} is a positive, but insufficient to offset the headwinds. `;
+    para += `Patience is warranted — wait for conditions to improve before initiating or adding to a position.`;
   }
 
-  if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
+  return para + riskSentence;
 }
 
-// Comprehensive DCA analysis
+// ─── Scoring engine ───────────────────────────────────────────────────────────
+
 async function analyzeDCA(symbol) {
   console.log(`\n🚀 Starting DCA analysis for ${symbol.toUpperCase()}...\n`);
-
-  let marketData = null;
-  let fundamentalData = null;
   const errors = [];
+  const sectorEtf = SECTOR_ETF[symbol.toUpperCase()];
 
-  try {
-    marketData = await fetchYahooChartData(symbol);
-    console.log('✅ Market/technical data loaded');
-  } catch (e) {
-    errors.push(`Market data: ${e.message}`);
-    console.error(`❌ Chart data error: ${e.message}`);
-  }
+  // All external fetches run in parallel
+  const [stockResult, spyResult, vixResult, sectorResult, fundResult] = await Promise.allSettled([
+    fetchYahooChartData(symbol),
+    fetchQuickChartData('SPY'),
+    fetchQuickChartData('^VIX'),
+    sectorEtf ? fetchQuickChartData(sectorEtf) : Promise.resolve(null),
+    fetchAlphaVantageFundamentals(symbol)
+  ]);
 
-  try {
-    fundamentalData = await fetchAlphaVantageFundamentals(symbol);
-    console.log('✅ Fundamental data loaded');
-  } catch (e) {
-    errors.push(`Fundamentals: ${e.message}`);
-  }
-
-  if (!marketData) {
+  if (stockResult.status !== 'fulfilled') {
+    errors.push(`Market data: ${stockResult.reason?.message}`);
+    console.error(`❌ ${stockResult.reason?.message}`);
     return {
       symbol: symbol.toUpperCase(),
       error: errors.join(' | '),
       tips: [
-        '1️⃣ Check the ticker symbol is correct (e.g., AAPL, MSFT, TSLA)',
-        '2️⃣ Try again in a moment (Yahoo Finance may be temporarily unavailable)',
-        '3️⃣ For fundamentals, get a FREE Alpha Vantage key: https://www.alphavantage.co/support/#api-key',
+        '1️⃣ Check ticker symbol is correct (e.g., AAPL, MSFT, TSLA)',
+        '2️⃣ Yahoo Finance may be temporarily unavailable — retry in a moment',
+        '3️⃣ For fundamentals, get a FREE Alpha Vantage key: alphavantage.co',
         '4️⃣ Windows: set ALPHA_VANTAGE_KEY=your_key  |  Linux/Mac: export ALPHA_VANTAGE_KEY=your_key'
       ]
     };
   }
 
-  const d = { ...marketData, ...fundamentalData };
+  const marketData = stockResult.value;
+  const spyData = spyResult.status === 'fulfilled' ? spyResult.value : null;
+  const vixData = vixResult.status === 'fulfilled' ? vixResult.value : null;
+  const sectorData = sectorResult.status === 'fulfilled' ? sectorResult.value : null;
+  const fundamentalData = fundResult.status === 'fulfilled' ? fundResult.value : null;
 
-  const range = (d.high52Week || 0) - (d.low52Week || 0);
-  const position = range > 0 ? (d.currentPrice - d.low52Week) / range : 0;
-  const distToPOC = d.pocPrice ? Math.abs(d.currentPrice - d.pocPrice) / d.currentPrice * 100 : 0;
+  if (fundamentalData) console.log('✅ Fundamental data loaded');
+  else errors.push(`Fundamentals: ${fundResult.reason?.message}`);
 
-  // Technical score (0–6)
+  const d = { ...marketData, ...(fundamentalData || {}) };
+  const cp = d.currentPrice;
+  const range52 = (d.high52Week || 0) - (d.low52Week || 0);
+  const position52 = range52 > 0 ? (cp - d.low52Week) / range52 : 0.5;
+  const distToPOC = d.pocPrice ? Math.abs(cp - d.pocPrice) / cp * 100 : 99;
+
+  const signals = {};
+
+  // ── 1. TECHNICAL SCORE (0–12) ──────────────────────────────────────────────
+
   let technicalScore = 0;
-  const rsi = parseFloat(d.rsi);
-  if (!isNaN(rsi)) technicalScore += rsi < 30 ? 2 : rsi > 70 ? 0 : 1;
-  if (d.pocPrice) technicalScore += distToPOC < 5 ? 2 : distToPOC < 10 ? 1 : 0;
-  if (d.orderFlowDelta !== undefined) technicalScore += d.orderFlowDelta > 0 ? 2 : 0;
 
-  // Fundamental score (0–6, only if data available)
-  let fundamentalScore = 0;
-  let fundamentalMax = 0;
+  // RSI (0–2): oversold is bullish only when price isn't already collapsing below MA50
+  const rsi = parseFloat(d.rsi);
+  let rsiScore = 0;
+  if (!isNaN(rsi)) {
+    if (rsi < 30) rsiScore = cp > d.ma50Raw ? 2 : 1; // discount if below MA50
+    else if (rsi <= 70) rsiScore = 1;
+    else rsiScore = 0;
+  }
+  signals.rsi = { score: rsiScore, max: 2, label: rsi < 30 ? 'Oversold' : rsi > 70 ? 'Overbought' : 'Neutral', value: rsi.toFixed(1) };
+  technicalScore += rsiScore;
+
+  // POC proximity (0–2)
+  const pocScore = distToPOC < 5 ? 2 : distToPOC < 10 ? 1 : 0;
+  signals.poc = { score: pocScore, max: 2, label: distToPOC < 5 ? 'At POC' : distToPOC < 10 ? 'Near POC' : 'Far from POC', value: `${distToPOC.toFixed(1)}%` };
+  technicalScore += pocScore;
+
+  // Order flow (0–2)
+  const flowScore = d.orderFlowDelta > 0 ? 2 : 0;
+  const flowM = Math.round(Math.abs(d.orderFlowDelta) / 1e6);
+  signals.orderFlow = { score: flowScore, max: 2, label: d.orderFlowDelta > 0 ? 'Bullish' : 'Bearish', value: `${d.orderFlowDelta > 0 ? '+' : '-'}${flowM}M` };
+  technicalScore += flowScore;
+
+  // MA trend (0–2): golden cross = price > MA20 AND MA20 > MA50
+  const priceAboveMA20 = cp > d.ma20Raw;
+  const ma20AboveMA50 = d.ma20Raw > d.ma50Raw;
+  const maScore = (priceAboveMA20 && ma20AboveMA50) ? 2 : (priceAboveMA20 || ma20AboveMA50) ? 1 : 0;
+  signals.maTrend = { score: maScore, max: 2, label: maScore === 2 ? 'Golden Cross' : maScore === 1 ? 'Partial Uptrend' : 'Downtrend', value: `P${priceAboveMA20?'>':'<'}MA20, MA20${ma20AboveMA50?'>':'<'}MA50` };
+  technicalScore += maScore;
+
+  // Volume confirmation (0–2)
+  signals.volumeConfirm = { score: d.volConfirmScore, max: 2, label: d.volConfirmScore === 2 ? 'Strong Buy Volume' : d.volConfirmScore === 1 ? 'Moderate' : 'Sell Pressure', value: '' };
+  technicalScore += d.volConfirmScore;
+
+  // Candlestick pattern (0–2)
+  const candleScore = (d.candlestickPattern === 'bullish_engulfing' || d.candlestickPattern === 'hammer') ? 2
+                    : d.candlestickPattern === 'doji' ? 1 : 0;
+  signals.candle = { score: candleScore, max: 2, label: d.candlestickPattern ? d.candlestickPattern.replace('_', ' ') : 'No pattern', value: '' };
+  technicalScore += candleScore;
+
+  // ── 2. MARKET CONTEXT SCORE (0–6) ─────────────────────────────────────────
+
+  let marketContextScore = 0;
+
+  // SPY regime (0–2)
+  let spyScore = 0, spyLabel = 'Unknown';
+  if (spyData) {
+    if (spyData.currentPrice > spyData.ma50) { spyScore = 2; spyLabel = 'Bull Market'; }
+    else if (spyData.currentPrice > spyData.ma20) { spyScore = 1; spyLabel = 'Mixed'; }
+    else { spyScore = 0; spyLabel = 'Bear Market'; }
+  }
+  signals.spyRegime = { score: spyScore, max: 2, label: spyLabel, value: spyData ? `$${spyData.currentPrice.toFixed(2)}` : 'N/A' };
+  marketContextScore += spyScore;
+
+  // VIX fear gauge (0–2): high fear = good DCA entry
+  let vixScore = 0, vixLabel = 'Unknown';
+  const vixLevel = vixData?.currentPrice;
+  if (vixLevel) {
+    if (vixLevel > 30) { vixScore = 2; vixLabel = 'High Fear (opportunity)'; }
+    else if (vixLevel > 20) { vixScore = 1; vixLabel = 'Elevated'; }
+    else { vixScore = 0; vixLabel = 'Low Fear (complacent)'; }
+  }
+  signals.vix = { score: vixScore, max: 2, label: vixLabel, value: vixLevel ? vixLevel.toFixed(1) : 'N/A' };
+  marketContextScore += vixScore;
+
+  // Sector relative strength (0–2)
+  let sectorScore = 0, sectorLabel = 'No sector data';
+  if (sectorData) {
+    const diff = d.ret20 - sectorData.ret20;
+    if (diff > 0.02) { sectorScore = 2; sectorLabel = `Outperforming ${sectorEtf}`; }
+    else if (diff > -0.02) { sectorScore = 1; sectorLabel = `In-line with ${sectorEtf}`; }
+    else { sectorScore = 0; sectorLabel = `Underperforming ${sectorEtf}`; }
+  }
+  signals.sectorStrength = {
+    score: sectorScore, max: 2, label: sectorLabel,
+    value: sectorData ? `${(d.ret20*100).toFixed(1)}% vs ${(sectorData.ret20*100).toFixed(1)}%` : 'N/A'
+  };
+  marketContextScore += sectorScore;
+
+  // ── 3. PRICE ACTION SCORE (0–6) ───────────────────────────────────────────
+
+  let priceActionScore = 0;
+
+  // 52-week position (0–2): lower third = best DCA value
+  const pos52Score = position52 < 0.33 ? 2 : position52 < 0.66 ? 1 : 0;
+  signals.position52 = { score: pos52Score, max: 2, label: position52 < 0.33 ? 'Near 52W Low' : position52 < 0.66 ? 'Mid Range' : 'Near 52W High', value: `${(position52*100).toFixed(0)}% of range` };
+  priceActionScore += pos52Score;
+
+  // Drawdown from 52-week high (0–2): deeper discount = more DCA value
+  const drawdown = parseFloat(d.drawdownFromHigh);
+  const drawdownScore = drawdown > 30 ? 2 : drawdown > 15 ? 1 : 0;
+  signals.drawdown = { score: drawdownScore, max: 2, label: `${drawdown.toFixed(1)}% off 52W high`, value: `$${d.high52Week?.toFixed(2)} → $${cp?.toFixed(2)}` };
+  priceActionScore += drawdownScore;
+
+  // Support proximity (0–2): bounce from a swing-low support is a stronger entry
+  let supportScore = 0, supportLabel = 'No clear support';
+  if (d.nearestSupport) {
+    const distToSupport = Math.abs(cp - parseFloat(d.nearestSupport)) / cp * 100;
+    if (distToSupport < 3) { supportScore = 2; supportLabel = 'At support'; }
+    else if (distToSupport < 7) { supportScore = 1; supportLabel = 'Near support'; }
+    else { supportScore = 0; supportLabel = 'Far from support'; }
+  }
+  signals.support = { score: supportScore, max: 2, label: supportLabel, value: d.nearestSupport ? `$${d.nearestSupport}` : 'N/A' };
+  priceActionScore += supportScore;
+
+  // ── 4. FUNDAMENTAL SCORE (0–8, if available) ──────────────────────────────
+
+  let fundamentalScore = 0, fundamentalMax = 0;
   if (fundamentalData) {
-    fundamentalMax = 6;
+    fundamentalMax = 8;
     if (d.pe) fundamentalScore += d.pe < 20 ? 2 : d.pe < 25 ? 1 : 0;
     if (d.roe) fundamentalScore += d.roe > 0.15 ? 2 : d.roe > 0.08 ? 1 : 0;
     if (d.profitMargin) fundamentalScore += d.profitMargin > 0.20 ? 2 : d.profitMargin > 0.10 ? 1 : 0;
+    if (d.revenueGrowthYOY != null) fundamentalScore += d.revenueGrowthYOY > 0.10 ? 2 : d.revenueGrowthYOY > 0 ? 1 : 0;
   }
 
-  // Score: average of available components
-  const techRatio = technicalScore / 6;
-  const dcaScore = fundamentalMax > 0
-    ? ((techRatio + fundamentalScore / fundamentalMax) / 2) * 100
-    : techRatio * 100;
+  // ── 5. RISK MODIFIERS ─────────────────────────────────────────────────────
 
-  const recommendation = dcaScore > 70 ? '✅ STRONG BUY' :
-                         dcaScore > 55 ? '👍 BUY' :
-                         dcaScore > 40 ? '⚖️ HOLD' :
-                         '⏸️ WAIT';
+  let riskModifier = 1.0;
+  const riskFlags = [];
+
+  if (d.beta && d.beta > 1.5) {
+    riskModifier *= 0.92;
+    riskFlags.push(`High beta (${d.beta.toFixed(2)}) — more noise`);
+  }
+  if (d.streak?.direction === 'down' && d.streak?.streak >= 5) {
+    riskModifier *= 0.90;
+    riskFlags.push(`${d.streak.streak} consecutive down days — momentum dump risk`);
+  }
+  if (d.ma200Raw && cp < d.ma200Raw) {
+    riskModifier *= 0.93;
+    riskFlags.push(`Below MA200 ($${d.ma200}) — long-term downtrend`);
+  }
+  if (d.candlestickPattern === 'bearish_engulfing') {
+    riskModifier *= 0.95;
+    riskFlags.push('Bearish engulfing candle — reversal signal');
+  }
+
+  // ── 6. FINAL SCORE + RECOMMENDATION ──────────────────────────────────────
+
+  const techRatio  = technicalScore / 12;
+  const mktRatio   = marketContextScore / 6;
+  const priceRatio = priceActionScore / 6;
+  const fundRatio  = fundamentalMax > 0 ? fundamentalScore / fundamentalMax : null;
+
+  const rawScore = fundRatio !== null
+    ? (techRatio * 0.35 + mktRatio * 0.25 + priceRatio * 0.20 + fundRatio * 0.20) * 100
+    : (techRatio * 0.45 + mktRatio * 0.30 + priceRatio * 0.25) * 100;
+
+  const dcaScore = Math.min(100, Math.max(0, rawScore * riskModifier));
+
+  const recommendation = dcaScore > 70 ? '✅ STRONG BUY'
+                       : dcaScore > 55 ? '👍 BUY'
+                       : dcaScore > 40 ? '⚖️ HOLD'
+                       : '⏸️ WAIT';
+
+  const allocationPct = dcaScore > 70 ? 100
+                      : dcaScore > 55 ? 75
+                      : dcaScore > 40 ? 50
+                      : dcaScore > 25 ? 25 : 0;
+
+  const marketForExplanation = {
+    currentPrice: cp?.toFixed(2),
+    high52Week: d.high52Week?.toFixed(2),
+    low52Week: d.low52Week?.toFixed(2),
+    position: (position52 * 100).toFixed(0),
+    drawdownFromHigh: parseFloat(d.drawdownFromHigh)
+  };
+
+  const explanation = generateExplanation(
+    symbol.toUpperCase(), recommendation, dcaScore.toFixed(2), allocationPct,
+    signals, null, marketForExplanation, riskFlags, fundamentalData
+  );
 
   return {
     symbol: symbol.toUpperCase(),
     analysis: {
       dcaScore: dcaScore.toFixed(2),
       recommendation,
+      allocationPct,
+      explanation,
+      riskModifier: riskModifier.toFixed(3),
+      riskFlags,
+      scoreBreakdown: {
+        technical:     { score: technicalScore,     max: 12, pct: Math.round(techRatio * 100) },
+        marketContext: { score: marketContextScore,  max: 6,  pct: Math.round(mktRatio * 100) },
+        priceAction:   { score: priceActionScore,    max: 6,  pct: Math.round(priceRatio * 100) },
+        fundamental: fundamentalMax > 0
+          ? { score: fundamentalScore, max: fundamentalMax, pct: Math.round((fundamentalScore/fundamentalMax) * 100) }
+          : null
+      },
+      signals,
       timestamp: d.timestamp
     },
     market: {
-      currentPrice: d.currentPrice?.toFixed(2),
+      currentPrice: cp?.toFixed(2),
       high52Week: d.high52Week?.toFixed(2),
       low52Week: d.low52Week?.toFixed(2),
-      position: (position * 100).toFixed(0),
-      avgVolume: d.avgVolume
+      position: (position52 * 100).toFixed(0),
+      drawdownFromHigh: d.drawdownFromHigh,
+      avgVolume: d.avgVolume,
+      ma200: d.ma200,
+      spyPrice: spyData?.currentPrice?.toFixed(2) || null,
+      spyRegime: spyLabel,
+      vixLevel: vixLevel?.toFixed(1) || null,
+      sectorEtf: sectorEtf || null,
+      streak: d.streak
     },
     technical: {
       rsi: d.rsi,
-      ma20: d.ma20,
-      ma50: d.ma50,
+      ma20: d.ma20, ma50: d.ma50, ma200: d.ma200,
       pocPrice: d.pocPrice?.toFixed(2),
-      pocVolume: d.pocVolume,
       distToPOC: distToPOC.toFixed(2),
       orderFlowDelta: d.orderFlowDelta,
       buyPressure: d.buyVolume,
-      sellPressure: d.sellVolume
+      sellPressure: d.sellVolume,
+      candlestickPattern: d.candlestickPattern,
+      nearestSupport: d.nearestSupport,
+      streak: d.streak
     },
     fundamental: fundamentalData ? {
       pe: d.pe?.toFixed(2) || 'N/A',
       forwardPE: d.forwardPE?.toFixed(2) || 'N/A',
       eps: d.eps?.toFixed(2) || 'N/A',
-      roe: d.roe?.toFixed(4) || 'N/A',
-      profitMargin: d.profitMargin?.toFixed(4) || 'N/A',
+      roe: d.roe ? `${(d.roe * 100).toFixed(1)}%` : 'N/A',
+      profitMargin: d.profitMargin ? `${(d.profitMargin * 100).toFixed(1)}%` : 'N/A',
+      revenueGrowthYOY: d.revenueGrowthYOY != null ? `${(d.revenueGrowthYOY * 100).toFixed(1)}%` : 'N/A',
+      earningsGrowthYOY: d.earningsGrowthYOY != null ? `${(d.earningsGrowthYOY * 100).toFixed(1)}%` : 'N/A',
       beta: d.beta?.toFixed(2) || 'N/A',
-      dividendYield: d.dividendYield != null ? (d.dividendYield * 100).toFixed(2) : '0',
-      marketCap: d.marketCap
+      dividendYield: d.dividendYield != null ? `${(d.dividendYield * 100).toFixed(2)}%` : '0%',
+      priceToBook: d.priceToBook?.toFixed(2) || 'N/A',
+      marketCap: d.marketCap,
+      sector: d.sector
     } : null,
     chartData: d.chartData || null,
-    errors: errors.length > 0 ? errors : null
+    errors: errors.length ? errors : null
   };
 }
 
-// HTTP Server
+// ─── HTTP Server ──────────────────────────────────────────────────────────────
+
 const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
-  const pathname = parsedUrl.pathname;
-  const query = parsedUrl.query;
-
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(200);
-    res.end();
-    return;
-  }
+  if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
-  if (pathname === '/api/analyze' && query.symbol) {
+  if (parsedUrl.pathname === '/api/analyze' && parsedUrl.query.symbol) {
     try {
-      const result = await analyzeDCA(query.symbol);
+      const result = await analyzeDCA(parsedUrl.query.symbol);
       res.writeHead(200);
       res.end(JSON.stringify(result, null, 2));
-    } catch (error) {
+    } catch (e) {
       res.writeHead(500);
-      res.end(JSON.stringify({ error: error.message }));
+      res.end(JSON.stringify({ error: e.message }));
     }
-  } else if (pathname === '/health') {
+  } else if (parsedUrl.pathname === '/health') {
     res.writeHead(200);
-    res.end(JSON.stringify({ status: 'ok', version: '2.0.0' }));
-  } else if (pathname === '/') {
+    res.end(JSON.stringify({ status: 'ok', version: '3.0.0' }));
+  } else if (parsedUrl.pathname === '/') {
     res.writeHead(200);
     res.end(JSON.stringify({
-      name: 'DCA Assistant API',
-      version: '2.0.0',
-      note: 'Technical data from Yahoo Finance (no key needed). Fundamental data requires ALPHA_VANTAGE_KEY env var.',
-      endpoints: { analyze: '/api/analyze?symbol=AAPL', health: '/health' },
-      example: 'http://localhost:3000/api/analyze?symbol=MSFT'
+      name: 'DCA Assistant API', version: '3.0.0',
+      note: 'Technical data from Yahoo Finance (no key needed). Fundamental data requires ALPHA_VANTAGE_KEY.',
+      endpoints: { analyze: '/api/analyze?symbol=AAPL', health: '/health' }
     }));
   } else {
     res.writeHead(404);
@@ -364,16 +700,20 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(CONFIG.port, () => {
   console.log(`
-╔════════════════════════════════════════════════════════════╗
-║          🚀 DCA ASSISTANT SERVER STARTED 🚀               ║
-╠════════════════════════════════════════════════════════════╣
-║  Server:  http://localhost:${CONFIG.port}                        ║
-║  Example: http://localhost:${CONFIG.port}/api/analyze?symbol=AAPL║
-║                                                            ║
-║  Data sources:                                             ║
-║  ✅ Yahoo Finance chart API  (no key needed)               ║
-║  ${CONFIG.alphaVantageKey !== 'demo' ? '✅' : '⚠️ '} Alpha Vantage fundamentals (${CONFIG.alphaVantageKey !== 'demo' ? 'key set' : 'set ALPHA_VANTAGE_KEY'})     ║
-╚════════════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════════╗
+║           🚀 DCA ASSISTANT SERVER v3.0 🚀                    ║
+╠═══════════════════════════════════════════════════════════════╣
+║  http://localhost:${CONFIG.port}/api/analyze?symbol=AAPL          ║
+║                                                               ║
+║  Scoring categories:                                          ║
+║  ✅ Technical      (RSI, MA trend, POC, order flow,           ║
+║                    volume confirm, candlestick)               ║
+║  ✅ Market Context (SPY regime, VIX, sector strength)         ║
+║  ✅ Price Action   (52W position, drawdown, support)          ║
+║  ✅ Risk Modifiers (beta, MA200, streak, bearish candle)       ║
+║  ✅ Position Sizing (0/25/50/75/100% of planned amount)       ║
+║  ${CONFIG.alphaVantageKey !== 'demo' ? '✅' : '⚠️ '} Fundamentals  (P/E, ROE, margins, revenue growth)     ║
+╚═══════════════════════════════════════════════════════════════╝
   `);
 });
 
