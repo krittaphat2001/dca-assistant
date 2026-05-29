@@ -464,7 +464,7 @@ function generateExplanation(symbol, rec, dcaScore, allocationPct, signals, scor
 
 // ─── Scoring engine ───────────────────────────────────────────────────────────
 
-async function analyzeDCA(symbol) {
+async function analyzeDCA(symbol, options = {}) {
   console.log(`\n🚀 Starting DCA analysis for ${symbol.toUpperCase()}...\n`);
   const errors = [];
   const sectorEtf = SECTOR_ETF[symbol.toUpperCase()];
@@ -475,7 +475,7 @@ async function analyzeDCA(symbol) {
     fetchQuickChartData('SPY'),
     fetchQuickChartData('^VIX'),
     sectorEtf ? fetchQuickChartData(sectorEtf) : Promise.resolve(null),
-    fetchAlphaVantageFundamentals(symbol)
+    options.yahooOnly ? Promise.resolve(null) : fetchAlphaVantageFundamentals(symbol)
   ]);
 
   if (stockResult.status !== 'fulfilled') {
@@ -752,6 +752,77 @@ async function analyzeDCA(symbol) {
   };
 }
 
+// ─── Scan Helpers ─────────────────────────────────────────────────────────────
+
+function extractScanEntry(result) {
+  return {
+    symbol: result.symbol,
+    dcaScore: parseFloat(result.analysis.dcaScore),
+    recommendation: result.analysis.recommendation,
+    allocationPct: result.analysis.allocationPct,
+    price: result.market.currentPrice,
+    drawdownFromHigh: result.market.drawdownFromHigh,
+    rsi: result.technical.rsi,
+    fundamentalScore: result.analysis.scoreBreakdown.fundamental?.score ?? null,
+    fundamentalMax: result.analysis.scoreBreakdown.fundamental?.max ?? null,
+    fundamental: result.fundamental ? {
+      pe: result.fundamental.pe,
+      forwardPE: result.fundamental.forwardPE,
+      roe: result.fundamental.roe,
+      profitMargin: result.fundamental.profitMargin,
+      revenueGrowthYOY: result.fundamental.revenueGrowthYOY,
+      sector: result.fundamental.sector
+    } : null,
+    error: null
+  };
+}
+
+async function scanConcurrent(symbols, sseWrite, isCancelled, concurrency = 5) {
+  const total = symbols.length;
+  for (let i = 0; i < total; i += concurrency) {
+    if (isCancelled()) break;
+    const batch = symbols.slice(i, i + concurrency);
+    sseWrite({ type: 'progress', current: i, total, symbol: batch[0] });
+    const settled = await Promise.allSettled(
+      batch.map(sym =>
+        analyzeDCA(sym, { yahooOnly: true }).then(r => extractScanEntry(r))
+      )
+    );
+    for (let j = 0; j < settled.length; j++) {
+      const r = settled[j];
+      if (r.status === 'fulfilled') {
+        sseWrite({ type: 'result', ...r.value });
+      } else {
+        sseWrite({ type: 'result', symbol: batch[j], dcaScore: null, error: r.reason?.message || 'Failed' });
+      }
+    }
+    // Brief pause between batches to avoid hammering Yahoo
+    if (i + concurrency < total && !isCancelled()) {
+      await new Promise(r => setTimeout(r, 300));
+    }
+  }
+  sseWrite({ type: 'done' });
+}
+
+async function scanWatchlist(symbols, sseWrite, isCancelled) {
+  const DELAY_MS = 13000;
+  for (let i = 0; i < symbols.length; i++) {
+    if (isCancelled()) break;
+    const sym = symbols[i];
+    sseWrite({ type: 'progress', current: i + 1, total: symbols.length, symbol: sym });
+    try {
+      const result = await analyzeDCA(sym);
+      sseWrite({ type: 'result', ...extractScanEntry(result) });
+    } catch (e) {
+      sseWrite({ type: 'result', symbol: sym, dcaScore: null, error: e.message });
+    }
+    if (i < symbols.length - 1 && !isCancelled()) {
+      await new Promise(r => setTimeout(r, DELAY_MS));
+    }
+  }
+  sseWrite({ type: 'done' });
+}
+
 // ─── HTTP Server ──────────────────────────────────────────────────────────────
 
 const server = http.createServer(async (req, res) => {
@@ -780,8 +851,50 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({
       name: 'DCA Assistant API', version: '3.0.0',
       note: 'Technical data from Yahoo Finance (no key needed). Fundamental data requires ALPHA_VANTAGE_KEY.',
-      endpoints: { analyze: '/api/analyze?symbol=AAPL', health: '/health' }
+      endpoints: { analyze: '/api/analyze?symbol=AAPL', scan: '/api/scan (POST {"symbols":[...]})', health: '/health' }
     }));
+  } else if (parsedUrl.pathname === '/api/scan' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      let symbols, universeMode = false;
+      try {
+        const parsed = JSON.parse(body);
+        if (parsed.universe === true) {
+          universeMode = true;
+          symbols = Object.keys(SECTOR_ETF);
+        } else {
+          symbols = parsed.symbols;
+          if (!Array.isArray(symbols) || symbols.length === 0) throw new Error('No symbols');
+          symbols = symbols
+            .slice(0, 20)
+            .map(s => String(s).toUpperCase().replace(/[^A-Z0-9.]/g, '').slice(0, 10))
+            .filter(Boolean);
+          if (symbols.length === 0) throw new Error('No valid symbols');
+        }
+      } catch (e) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: e.message || 'Invalid request: expected {"symbols":[...]} or {"universe":true}' }));
+        return;
+      }
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      });
+      let cancelled = false;
+      res.on('close', () => { cancelled = true; });
+      const sseWrite = (obj) => {
+        if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`);
+      };
+      if (universeMode) {
+        await scanConcurrent(symbols, sseWrite, () => cancelled);
+      } else {
+        await scanWatchlist(symbols, sseWrite, () => cancelled);
+      }
+      if (!res.writableEnded) res.end();
+    });
   } else {
     res.writeHead(404);
     res.end(JSON.stringify({ error: 'Not found' }));
