@@ -989,13 +989,17 @@
             // ── Signals tab ──
             const sig = data.analysis.signals;
             document.getElementById('signalsContent').innerHTML =
-                signalTable('Technical Signals (max 12 pts)',
+                signalTable('Technical Signals (max 20 pts)',
                     signalRow('RSI (14)', sig.rsi) +
                     signalRow('MA Trend', sig.maTrend) +
                     signalRow('POC Proximity', sig.poc) +
                     signalRow('Order Flow', sig.orderFlow) +
                     signalRow('Volume Confirmation', sig.volumeConfirm) +
-                    signalRow('Candlestick', sig.candle)
+                    signalRow('Candlestick', sig.candle) +
+                    signalRow('MACD', sig.macd) +
+                    signalRow('Bollinger Bands', sig.bollingerBands) +
+                    signalRow('ADX Trend Strength', sig.adx) +
+                    signalRow('OBV (Accumulation)', sig.obv)
                 ) +
                 signalTable('Market Context Signals (max 6 pts)',
                     signalRow('SPY Regime', sig.spyRegime) +

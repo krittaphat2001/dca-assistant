@@ -225,6 +225,95 @@ function scoreVolumeConfirmation(ohlcv) {
   return ratio > 0.65 ? 2 : ratio > 0.50 ? 1 : 0;
 }
 
+// ─── New technical indicators ─────────────────────────────────────────────────
+
+function calcEMASeq(values, period) {
+  if (values.length < period) return [];
+  const k = 2 / (period + 1);
+  const result = [];
+  let ema = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  result.push(ema);
+  for (let i = period; i < values.length; i++) {
+    ema = values[i] * k + ema * (1 - k);
+    result.push(ema);
+  }
+  return result;
+}
+
+function calculateMACD(closes) {
+  const ema12 = calcEMASeq(closes, 12);
+  const ema26 = calcEMASeq(closes, 26);
+  if (ema12.length < 15 || ema26.length < 2) return null;
+  const macdLine = ema26.map((v, i) => ema12[i + 14] - v);
+  const signalLine = calcEMASeq(macdLine, 9);
+  if (!signalLine.length) return null;
+  const macd = macdLine[macdLine.length - 1];
+  const signal = signalLine[signalLine.length - 1];
+  const histogram = macd - signal;
+  const prevHist = signalLine.length >= 2
+    ? macdLine[macdLine.length - 2] - signalLine[signalLine.length - 2]
+    : 0;
+  return { macd, signal, histogram, expanding: histogram > 0 && Math.abs(histogram) > Math.abs(prevHist) };
+}
+
+function calculateBollingerBands(closes, period = 20) {
+  if (closes.length < period) return null;
+  const recent = closes.slice(-period);
+  const sma = recent.reduce((a, b) => a + b, 0) / period;
+  const std = Math.sqrt(recent.reduce((s, c) => s + (c - sma) ** 2, 0) / period);
+  return { upper: sma + 2 * std, middle: sma, lower: sma - 2 * std };
+}
+
+function calculateADX(ohlcv, period = 14) {
+  if (ohlcv.length < period * 2 + 1) return null;
+  const bars = ohlcv.slice(-(period * 3 + 1));
+  const tr = [], pDM = [], mDM = [];
+  for (let i = 1; i < bars.length; i++) {
+    const { high, low } = bars[i];
+    const prevClose = bars[i - 1].close;
+    tr.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)));
+    const up = high - bars[i - 1].high;
+    const dn = bars[i - 1].low - low;
+    pDM.push(up > dn && up > 0 ? up : 0);
+    mDM.push(dn > up && dn > 0 ? dn : 0);
+  }
+  if (tr.length < period) return null;
+  let sTR = tr.slice(0, period).reduce((a, b) => a + b, 0);
+  let sPDM = pDM.slice(0, period).reduce((a, b) => a + b, 0);
+  let sMDM = mDM.slice(0, period).reduce((a, b) => a + b, 0);
+  const dxArr = [];
+  let latestPDI = 0, latestMDI = 0;
+  for (let i = period; i < tr.length; i++) {
+    sTR = sTR - sTR / period + tr[i];
+    sPDM = sPDM - sPDM / period + pDM[i];
+    sMDM = sMDM - sMDM / period + mDM[i];
+    if (sTR === 0) continue;
+    latestPDI = (sPDM / sTR) * 100;
+    latestMDI = (sMDM / sTR) * 100;
+    const diSum = latestPDI + latestMDI;
+    if (diSum > 0) dxArr.push(Math.abs(latestPDI - latestMDI) / diSum * 100);
+  }
+  if (dxArr.length < period) return null;
+  const adx = dxArr.slice(-period).reduce((a, b) => a + b, 0) / period;
+  return { adx, plusDI: latestPDI, minusDI: latestMDI };
+}
+
+function calculateOBVTrend(ohlcv) {
+  if (ohlcv.length < 21) return null;
+  const bars = ohlcv.slice(-21);
+  let obv = 0;
+  const obvArr = [0];
+  for (let i = 1; i < bars.length; i++) {
+    if (bars[i].close > bars[i - 1].close) obv += bars[i].volume;
+    else if (bars[i].close < bars[i - 1].close) obv -= bars[i].volume;
+    obvArr.push(obv);
+  }
+  const latest = obvArr[obvArr.length - 1];
+  const mid = obvArr[Math.floor(obvArr.length / 2)];
+  const earliest = obvArr[0];
+  return { trendUp: latest > earliest, strongUp: latest > mid && mid > earliest };
+}
+
 // ─── Data fetchers ────────────────────────────────────────────────────────────
 
 // Lightweight fetch for SPY, VIX, sector ETF — only needs price + MAs + 20-day return
@@ -297,6 +386,12 @@ async function fetchYahooChartData(symbol) {
   const streak = countConsecutiveDays(ohlcv);
   const candlestickPattern = detectCandlestickPattern(ohlcv);
   const volConfirmScore = scoreVolumeConfirmation(ohlcv);
+
+  const closesChron = ohlcv.map(d => d.close);
+  const macdData = calculateMACD(closesChron);
+  const bbData = calculateBollingerBands(closesChron);
+  const adxData = calculateADX(ohlcv);
+  const obvData = calculateOBVTrend(ohlcv);
   const ret20 = ohlcv.length >= 21
     ? (currentPrice - ohlcv[ohlcv.length - 21].close) / ohlcv[ohlcv.length - 21].close
     : 0;
@@ -332,6 +427,7 @@ async function fetchYahooChartData(symbol) {
     candlestickPattern,
     nearestSupport: nearestSupport ? nearestSupport.toFixed(2) : null,
     streak, volConfirmScore, ret20,
+    macdData, bbData, adxData, obvData,
     chartData,
     timestamp: new Date().toISOString()
   };
@@ -553,6 +649,49 @@ async function analyzeDCA(symbol, options = {}) {
   signals.candle = { score: candleScore, max: 2, label: d.candlestickPattern ? d.candlestickPattern.replace('_', ' ') : 'No pattern', value: '' };
   technicalScore += candleScore;
 
+  // MACD (0–2): trend momentum direction + histogram expansion
+  let macdScore = 0, macdLabel = 'N/A';
+  if (d.macdData) {
+    const { macd, signal: sig, expanding } = d.macdData;
+    if (macd > sig && expanding) { macdScore = 2; macdLabel = 'Bullish + Expanding'; }
+    else if (macd > sig)         { macdScore = 1; macdLabel = 'Bullish Crossover'; }
+    else                          { macdScore = 0; macdLabel = 'Bearish'; }
+  }
+  signals.macd = { score: macdScore, max: 2, label: macdLabel, value: d.macdData ? `${d.macdData.macd.toFixed(2)} vs ${d.macdData.signal.toFixed(2)}` : 'N/A' };
+  technicalScore += macdScore;
+
+  // Bollinger Bands (0–2): oversold positioning is best DCA entry
+  let bbScore = 0, bbLabel = 'N/A';
+  if (d.bbData) {
+    const { upper, middle, lower } = d.bbData;
+    if (cp <= lower)  { bbScore = 2; bbLabel = 'At/Below Lower Band'; }
+    else if (cp < middle) { bbScore = 1; bbLabel = 'Below Mid Band'; }
+    else { bbScore = 0; bbLabel = cp > upper ? 'Above Upper Band' : 'Above Mid Band'; }
+  }
+  signals.bollingerBands = { score: bbScore, max: 2, label: bbLabel, value: d.bbData ? `${d.bbData.lower.toFixed(2)}–${d.bbData.upper.toFixed(2)}` : 'N/A' };
+  technicalScore += bbScore;
+
+  // ADX – trend strength (0–2)
+  let adxScore = 0, adxLabel = 'N/A';
+  if (d.adxData) {
+    const { adx, plusDI, minusDI } = d.adxData;
+    if (adx > 25 && plusDI > minusDI) { adxScore = 2; adxLabel = `Strong Uptrend`; }
+    else if (plusDI > minusDI)         { adxScore = 1; adxLabel = `Bullish DI`; }
+    else                                { adxScore = 0; adxLabel = `Downtrend/Weak`; }
+  }
+  signals.adx = { score: adxScore, max: 2, label: adxLabel, value: d.adxData ? `ADX ${d.adxData.adx.toFixed(1)}  +DI ${d.adxData.plusDI.toFixed(1)}  -DI ${d.adxData.minusDI.toFixed(1)}` : 'N/A' };
+  technicalScore += adxScore;
+
+  // OBV trend (0–2): accumulation vs distribution
+  let obvScore = 0, obvLabel = 'N/A';
+  if (d.obvData) {
+    if (d.obvData.strongUp)      { obvScore = 2; obvLabel = 'Strong Accumulation'; }
+    else if (d.obvData.trendUp)  { obvScore = 1; obvLabel = 'Mild Accumulation'; }
+    else                          { obvScore = 0; obvLabel = 'Distribution / Flat'; }
+  }
+  signals.obv = { score: obvScore, max: 2, label: obvLabel, value: '' };
+  technicalScore += obvScore;
+
   // ── 2. MARKET CONTEXT SCORE (0–6) ─────────────────────────────────────────
 
   let marketContextScore = 0;
@@ -653,7 +792,7 @@ async function analyzeDCA(symbol, options = {}) {
 
   // ── 6. FINAL SCORE + RECOMMENDATION ──────────────────────────────────────
 
-  const techRatio  = technicalScore / 12;
+  const techRatio  = technicalScore / 20;
   const mktRatio   = marketContextScore / 6;
   const priceRatio = priceActionScore / 6;
   const fundRatio  = fundamentalMax > 0 ? fundamentalScore / fundamentalMax : null;
@@ -697,7 +836,7 @@ async function analyzeDCA(symbol, options = {}) {
       riskModifier: riskModifier.toFixed(3),
       riskFlags,
       scoreBreakdown: {
-        technical:     { score: technicalScore,     max: 12, pct: Math.round(techRatio * 100) },
+        technical:     { score: technicalScore,     max: 20, pct: Math.round(techRatio * 100) },
         marketContext: { score: marketContextScore,  max: 6,  pct: Math.round(mktRatio * 100) },
         priceAction:   { score: priceActionScore,    max: 6,  pct: Math.round(priceRatio * 100) },
         fundamental: fundamentalMax > 0
