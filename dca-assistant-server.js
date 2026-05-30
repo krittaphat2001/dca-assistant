@@ -990,7 +990,7 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({
       name: 'DCA Assistant API', version: '3.0.0',
       note: 'Technical data from Yahoo Finance (no key needed). Fundamental data requires ALPHA_VANTAGE_KEY.',
-      endpoints: { analyze: '/api/analyze?symbol=AAPL', scan: '/api/scan (POST {"symbols":[...]})', health: '/health' }
+      endpoints: { analyze: '/api/analyze?symbol=AAPL', compare: '/api/compare?symbols=AAPL,MSFT,TSLA', scan: '/api/scan (POST {"symbols":[...]})', health: '/health' }
     }));
   } else if (parsedUrl.pathname === '/api/scan' && req.method === 'POST') {
     let body = '';
@@ -1034,6 +1034,42 @@ const server = http.createServer(async (req, res) => {
       }
       if (!res.writableEnded) res.end();
     });
+  } else if (parsedUrl.pathname === '/api/compare') {
+    try {
+      const raw = parsedUrl.query.symbols;
+      if (!raw || !raw.trim()) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: 'Missing symbols parameter. Example: /api/compare?symbols=AAPL,MSFT,TSLA' }));
+        return;
+      }
+      const symbols = [...new Set(
+        raw.split(',')
+          .map(s => String(s).toUpperCase().replace(/[^A-Z0-9.]/g, '').slice(0, 10))
+          .filter(Boolean)
+      )].slice(0, 10);
+      if (symbols.length === 0) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: 'No valid symbols provided.' }));
+        return;
+      }
+      const settled = await Promise.allSettled(symbols.map(s => analyzeDCA(s)));
+      const ranked = [];
+      const errors = [];
+      for (let i = 0; i < settled.length; i++) {
+        const r = settled[i];
+        if (r.status === 'fulfilled') {
+          ranked.push(extractScanEntry(r.value));
+        } else {
+          errors.push({ symbol: symbols[i], error: r.reason?.message || 'Failed' });
+        }
+      }
+      ranked.sort((a, b) => b.dcaScore - a.dcaScore);
+      res.writeHead(200);
+      res.end(JSON.stringify({ count: ranked.length, ranked, errors: errors.length ? errors : null }, null, 2));
+    } catch (e) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: e.message }));
+    }
   } else {
     res.writeHead(404);
     res.end(JSON.stringify({ error: 'Not found' }));
