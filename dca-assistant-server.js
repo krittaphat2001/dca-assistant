@@ -792,26 +792,59 @@ async function analyzeDCA(symbol, options = {}) {
 
   // ── 6. FINAL SCORE + RECOMMENDATION ──────────────────────────────────────
 
+  // Axis weights and tier cutoffs
+  const AXIS_WEIGHT_ENTRY = 0.5, AXIS_WEIGHT_QUALITY = 0.5;
+  const TIER_HI = 58, TIER_LO = 42;
+
+  // Entry axis (max 16): timing / valuation signals
+  const entryMax = 16;
+  const entryRaw = signals.rsi.score + signals.poc.score + signals.bollingerBands.score
+                 + signals.position52.score + signals.drawdown.score + signals.support.score
+                 + signals.vix.score + signals.candle.score;
+  const entryScore = Math.min(100, Math.max(0, Math.round(entryRaw / entryMax * 100)));
+
+  // Quality axis (max 16 without fundamentals, 24 with)
+  const qualityMax = 16 + fundamentalMax;
+  const qualityRaw = signals.orderFlow.score + signals.maTrend.score + signals.volumeConfirm.score
+                   + signals.macd.score + signals.adx.score + signals.obv.score
+                   + signals.spyRegime.score + signals.sectorStrength.score + fundamentalScore;
+  const qualityScore = Math.min(100, Math.max(0, Math.round((qualityRaw / qualityMax * 100) * riskModifier)));
+
+  const blendedScore = Math.min(100, Math.max(0, Math.round(AXIS_WEIGHT_ENTRY * entryScore + AXIS_WEIGHT_QUALITY * qualityScore)));
+
+  // Tier each axis
+  const tier = s => s >= TIER_HI ? 'high' : s >= TIER_LO ? 'mid' : 'low';
+  const entryTier   = tier(entryScore);
+  const qualityTier = tier(qualityScore);
+
+  // 3x3 quadrant lookup
+  const QUADRANT = {
+    high: {
+      high: { recommendation: '✅ STRONG BUY',        allocationPct: 100, insight: 'Quality on sale' },
+      mid:  { recommendation: '👍 BUY',               allocationPct: 75,  insight: 'On sale, solid quality' },
+      low:  { recommendation: '⚠️ CAUTION',           allocationPct: 25,  insight: 'Cheap but weak — value-trap risk' }
+    },
+    mid: {
+      high: { recommendation: '👍 BUY',               allocationPct: 75,  insight: 'Quality at a fair price' },
+      mid:  { recommendation: '⚖️ HOLD',              allocationPct: 50,  insight: 'Neutral DCA' },
+      low:  { recommendation: '⏸️ WAIT',              allocationPct: 25,  insight: 'Weak; only a fair price' }
+    },
+    low: {
+      high: { recommendation: '⏳ ACCUMULATE SLOWLY', allocationPct: 50,  insight: 'Quality but expensive' },
+      mid:  { recommendation: '⏸️ WAIT',              allocationPct: 25,  insight: 'Pricey, average quality' },
+      low:  { recommendation: '⛔ AVOID',             allocationPct: 0,   insight: 'Expensive & weak' }
+    }
+  };
+
+  const q = QUADRANT[entryTier][qualityTier];
+  const recommendation = q.recommendation;
+  const allocationPct  = q.allocationPct;
+  const dcaScore       = blendedScore;
+
+  // Legacy ratios kept for scoreBreakdown (UI reads these)
   const techRatio  = technicalScore / 20;
   const mktRatio   = marketContextScore / 6;
   const priceRatio = priceActionScore / 6;
-  const fundRatio  = fundamentalMax > 0 ? fundamentalScore / fundamentalMax : null;
-
-  const rawScore = fundRatio !== null
-    ? (techRatio * 0.35 + mktRatio * 0.25 + priceRatio * 0.20 + fundRatio * 0.20) * 100
-    : (techRatio * 0.45 + mktRatio * 0.30 + priceRatio * 0.25) * 100;
-
-  const dcaScore = Math.min(100, Math.max(0, rawScore * riskModifier));
-
-  const recommendation = dcaScore > 70 ? '✅ STRONG BUY'
-                       : dcaScore > 55 ? '👍 BUY'
-                       : dcaScore > 40 ? '⚖️ HOLD'
-                       : '⏸️ WAIT';
-
-  const allocationPct = dcaScore > 70 ? 100
-                      : dcaScore > 55 ? 75
-                      : dcaScore > 40 ? 50
-                      : dcaScore > 25 ? 25 : 0;
 
   const marketForExplanation = {
     currentPrice: cp?.toFixed(2),
@@ -821,17 +854,26 @@ async function analyzeDCA(symbol, options = {}) {
     drawdownFromHigh: parseFloat(d.drawdownFromHigh)
   };
 
-  const explanation = generateExplanation(
-    symbol.toUpperCase(), recommendation, dcaScore.toFixed(2), allocationPct,
+  const axisPrefix = `Entry ${entryScore}/100 · Business & Trend Quality ${qualityScore}/100 — ${q.insight}. `;
+  const explanation = axisPrefix + generateExplanation(
+    symbol.toUpperCase(), recommendation, String(dcaScore), allocationPct,
     signals, null, marketForExplanation, riskFlags, fundamentalData
   );
 
   return {
     symbol: symbol.toUpperCase(),
     analysis: {
-      dcaScore: dcaScore.toFixed(2),
+      dcaScore,
       recommendation,
       allocationPct,
+      entryScore,
+      qualityScore,
+      blendedScore,
+      quadrant: { entryTier, qualityTier, label: q.insight },
+      axes: {
+        entry:   { score: entryRaw,   max: entryMax,   pct: entryScore },
+        quality: { score: qualityRaw, max: qualityMax, pct: qualityScore }
+      },
       explanation,
       riskModifier: riskModifier.toFixed(3),
       riskFlags,
@@ -897,6 +939,9 @@ function extractScanEntry(result) {
   return {
     symbol: result.symbol,
     dcaScore: parseFloat(result.analysis.dcaScore),
+    entryScore: result.analysis.entryScore,
+    qualityScore: result.analysis.qualityScore,
+    quadrant: result.analysis.quadrant?.label ?? null,
     recommendation: result.analysis.recommendation,
     allocationPct: result.analysis.allocationPct,
     price: result.market.currentPrice,
