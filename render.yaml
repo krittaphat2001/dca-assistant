@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: dca-assistant
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node dca-assistant-server.js
+    envVars:
+      - key: ALPHA_VANTAGE_KEY
+        sync: false

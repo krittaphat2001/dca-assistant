@@ -7,11 +7,13 @@
 const http = require('http');
 const https = require('https');
 const url = require('url');
+const fs = require('fs');
+const path = require('path');
 
 function loadConfig() {
-  const base = { port: 3000, alphaVantageKey: process.env.ALPHA_VANTAGE_KEY || 'demo' };
+  const base = { port: process.env.PORT || 3000, alphaVantageKey: process.env.ALPHA_VANTAGE_KEY || 'demo' };
   try {
-    const file = require('fs').readFileSync(require('path').join(__dirname, 'config.json'), 'utf8');
+    const file = fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8');
     return { ...base, ...JSON.parse(file) };
   } catch { return base; }
 }
@@ -1031,6 +1033,17 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200);
     res.end(JSON.stringify({ status: 'ok', version: '3.0.0' }));
   } else if (parsedUrl.pathname === '/') {
+    fs.readFile(path.join(__dirname, 'dca-assistant.html'), 'utf8', (err, html) => {
+      if (err) {
+        res.writeHead(200);
+        res.end(JSON.stringify({ name: 'DCA Assistant API', version: '3.0.0', note: 'UI file not found.' }));
+      } else {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.writeHead(200);
+        res.end(html);
+      }
+    });
+  } else if (parsedUrl.pathname === '/api' && req.method === 'GET') {
     res.writeHead(200);
     res.end(JSON.stringify({
       name: 'DCA Assistant API', version: '3.0.0',
