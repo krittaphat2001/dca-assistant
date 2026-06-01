@@ -2,3 +2,5 @@ node_modules/
 config.json
 *.png
 watchlist.json
+portfolio-data.json
+portfolio-history.json

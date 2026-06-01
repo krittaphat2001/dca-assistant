@@ -21,6 +21,19 @@ function loadConfig() {
 const CONFIG = loadConfig();
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
+const portfolioDataPath = path.join(__dirname, 'portfolio-data.json');
+const portfolioHistoryPath = path.join(__dirname, 'portfolio-history.json');
+
+function readPortfolio() {
+  try { return JSON.parse(fs.readFileSync(portfolioDataPath, 'utf8')); }
+  catch { return { positions: [] }; }
+}
+
+function readPortfolioHistory() {
+  try { return JSON.parse(fs.readFileSync(portfolioHistoryPath, 'utf8')); }
+  catch { return []; }
+}
+
 // Map tickers to their sector ETF for relative strength comparison
 const SECTOR_ETF = {
   // XLK — Technology
@@ -127,6 +140,12 @@ const SECTOR_ETF = {
   AVY:'XLB',PKG:'XLB',IP:'XLB',SEE:'XLB',
 };
 
+// Median P/E ratio by sector — used for sector-relative valuation scoring
+const SECTOR_PE_MEDIAN = {
+  XLK: 28, XLC: 22, XLF: 14, XLV: 20, XLY: 24,
+  XLP: 20, XLE: 12, XLI: 20, XLB: 18, XLRE: 35, XLU: 18
+};
+
 // ─── HTTP helper ────────────────────────────────────────────────────────────
 
 function makeRequest(urlString) {
@@ -172,20 +191,26 @@ function calculateRSI(prices, period = 14) {
 // Detects the most significant pattern on the last two bars (chronological array)
 function detectCandlestickPattern(ohlcv) {
   if (ohlcv.length < 2) return null;
-  const curr = ohlcv[ohlcv.length - 1];
-  const prev = ohlcv[ohlcv.length - 2];
-  const body = Math.abs(curr.close - curr.open);
-  const range = curr.high - curr.low;
-  if (range === 0) return null;
-  const lowerWick = Math.min(curr.open, curr.close) - curr.low;
-  const upperWick = curr.high - Math.max(curr.open, curr.close);
+  const c0 = ohlcv[ohlcv.length - 1];
+  const c1 = ohlcv[ohlcv.length - 2];
+  const c2 = ohlcv.length >= 3 ? ohlcv[ohlcv.length - 3] : null;
+  const body0 = Math.abs(c0.close - c0.open);
+  const range0 = c0.high - c0.low;
+  if (range0 === 0) return null;
+  const lowerWick0 = Math.min(c0.open, c0.close) - c0.low;
+  const upperWick0 = c0.high - Math.max(c0.open, c0.close);
 
-  if (body / range < 0.1) return 'doji';
-  if (curr.close > curr.open && prev.close < prev.open &&
-      curr.open < prev.close && curr.close > prev.open) return 'bullish_engulfing';
-  if (curr.close < curr.open && prev.close > prev.open &&
-      curr.open > prev.close && curr.close < prev.open) return 'bearish_engulfing';
-  if (lowerWick > 2 * body && upperWick < body && curr.close > curr.open) return 'hammer';
+  if (body0 / range0 < 0.1) return 'doji';
+  if (c0.close > c0.open && c1.close < c1.open &&
+      c0.open < c1.close && c0.close > c1.open) return 'bullish_engulfing';
+  if (c0.close < c0.open && c1.close > c1.open &&
+      c0.open > c1.close && c0.close < c1.open) return 'bearish_engulfing';
+  if (lowerWick0 > 2 * body0 && upperWick0 < body0 * 0.5 && c0.close > c0.open) return 'hammer';
+  if (upperWick0 > 2 * body0 && lowerWick0 < body0 * 0.5 && c0.close < c0.open) return 'shooting_star';
+  if (c2 && c2.close < c2.open && body0 > range0 * 0.5 && c0.close > c0.open &&
+      c0.close > (c2.open + c2.close) / 2) return 'morning_star';
+  if (c2 && c2.close > c2.open && body0 > range0 * 0.5 && c0.close < c0.open &&
+      c0.close < (c2.open + c2.close) / 2) return 'evening_star';
   return null;
 }
 
@@ -319,8 +344,8 @@ function calculateOBVTrend(ohlcv) {
 // ─── Data fetchers ────────────────────────────────────────────────────────────
 
 // Lightweight fetch for SPY, VIX, sector ETF — only needs price + MAs + 20-day return
-async function fetchQuickChartData(symbol) {
-  const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo&includePrePost=false`;
+async function fetchQuickChartData(symbol, range = '3mo') {
+  const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${range}&includePrePost=false`;
   const data = await makeRequest(chartUrl);
   if (!data.chart?.result?.length) return null;
   const quotes = data.chart.result[0].indicators.quote[0];
@@ -329,18 +354,19 @@ async function fetchQuickChartData(symbol) {
     .filter(c => c != null);
   if (!closes.length) return null;
   const currentPrice = closes[closes.length - 1];
-  const ma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, closes.length);
-  const ma50 = closes.slice(-50).reduce((a, b) => a + b, 0) / Math.min(50, closes.length);
-  const ret20 = closes.length >= 21
-    ? (currentPrice - closes[closes.length - 21]) / closes[closes.length - 21]
-    : 0;
-  return { symbol, currentPrice, ma20, ma50, ret20 };
+  const n = closes.length;
+  const ma20  = closes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, n);
+  const ma50  = closes.slice(-50).reduce((a, b) => a + b, 0) / Math.min(50, n);
+  const ma200 = closes.slice(-200).reduce((a, b) => a + b, 0) / Math.min(200, n);
+  const ret20 = n >= 21 ? (currentPrice - closes[n - 21]) / closes[n - 21] : 0;
+  const ret60 = n >= 61 ? (currentPrice - closes[n - 61]) / closes[n - 61] : ret20;
+  return { symbol, currentPrice, ma20, ma50, ma200, ret20, ret60, closes };
 }
 
 // Full chart data for the analyzed stock
 async function fetchYahooChartData(symbol) {
   console.log(`📊 Fetching Yahoo Finance chart data for ${symbol}...`);
-  const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6mo&includePrePost=false`;
+  const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1y&includePrePost=false`;
   const data = await makeRequest(chartUrl);
   if (!data.chart?.result?.length) {
     throw new Error(data.chart?.error?.description || 'Symbol not found or data unavailable');
@@ -377,6 +403,7 @@ async function fetchYahooChartData(symbol) {
   const ma50 = closes.slice(0, Math.min(50, closes.length)).reduce((a, b) => a + b, 0) / Math.min(50, closes.length);
   const ma200 = closes.slice(0, Math.min(200, closes.length)).reduce((a, b) => a + b, 0) / Math.min(200, closes.length);
   const rsi = calculateRSI([...closes].reverse(), 14);
+
   const avgVolume = Math.round(last20.reduce((a, d) => a + d.volume, 0) / last20.length);
 
   const currentPrice = meta.regularMarketPrice;
@@ -389,7 +416,36 @@ async function fetchYahooChartData(symbol) {
   const candlestickPattern = detectCandlestickPattern(ohlcv);
   const volConfirmScore = scoreVolumeConfirmation(ohlcv);
 
-  const closesChron = ohlcv.map(d => d.close);
+  // RSI historical percentile (how oversold vs own history)
+  const closesChron = ohlcv.map(d => d.close); // chronological order for MACD/indicators
+  const rsiHistory = [];
+  for (let i = 28; i < closesChron.length; i++) {
+    rsiHistory.push(calculateRSI(closesChron.slice(0, i + 1), 14));
+  }
+  const rsiPercentile = rsiHistory.length > 5
+    ? Math.round(rsiHistory.filter(r => r <= rsi).length / rsiHistory.length * 100)
+    : 50;
+
+  // Order flow magnitude percentile (normalized by avg volume)
+  const flowHistory = [];
+  for (let i = 20; i <= ohlcv.length; i++) {
+    const w = ohlcv.slice(i - 20, i);
+    const wAvg = w.reduce((s, d) => s + d.volume, 0) / 20;
+    if (wAvg === 0) continue;
+    const buyV = w.filter(d => d.close > d.open).reduce((s, d) => s + d.volume, 0);
+    const sellV = w.filter(d => d.close <= d.open).reduce((s, d) => s + d.volume, 0);
+    flowHistory.push((buyV - sellV) / wAvg);
+  }
+  const currentNormFlow = avgVolume > 0 ? (totalBuyVolume - totalSellVolume) / avgVolume : 0;
+  const flowPercentile = flowHistory.length > 5
+    ? Math.round(flowHistory.filter(f => f <= currentNormFlow).length / flowHistory.length * 100)
+    : 50;
+
+  // 10-day return to detect recovery vs continued fall
+  const ret10 = ohlcv.length >= 11
+    ? (currentPrice - ohlcv[ohlcv.length - 11].close) / ohlcv[ohlcv.length - 11].close
+    : 0;
+
   const macdData = calculateMACD(closesChron);
   const bbData = calculateBollingerBands(closesChron);
   const adxData = calculateADX(ohlcv);
@@ -397,6 +453,9 @@ async function fetchYahooChartData(symbol) {
   const ret20 = ohlcv.length >= 21
     ? (currentPrice - ohlcv[ohlcv.length - 21].close) / ohlcv[ohlcv.length - 21].close
     : 0;
+  const ret60 = ohlcv.length >= 61
+    ? (currentPrice - ohlcv[ohlcv.length - 61].close) / ohlcv[ohlcv.length - 61].close
+    : ret20;
 
   // Chart data: last 60 days with rolling MA lines
   const allCloses = ohlcv.map(d => d.close);
@@ -424,11 +483,11 @@ async function fetchYahooChartData(symbol) {
     orderFlowDelta: totalBuyVolume - totalSellVolume,
     ma20Raw: ma20, ma50Raw: ma50, ma200Raw: ma200,
     ma20: ma20.toFixed(2), ma50: ma50.toFixed(2), ma200: ma200.toFixed(2),
-    rsi: rsi.toFixed(2),
+    rsi: rsi.toFixed(2), rsiPercentile, flowPercentile,
     drawdownFromHigh: drawdownFromHigh.toFixed(2),
     candlestickPattern,
     nearestSupport: nearestSupport ? nearestSupport.toFixed(2) : null,
-    streak, volConfirmScore, ret20,
+    streak, volConfirmScore, ret10, ret20, ret60,
     macdData, bbData, adxData, obvData,
     chartData,
     timestamp: new Date().toISOString()
@@ -458,6 +517,14 @@ async function fetchAlphaVantageFundamentals(symbol) {
   };
 }
 
+async function fetchEarningsDate(symbol) {
+  try {
+    const data = await makeRequest(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=calendarEvents`);
+    const raw = data.quoteSummary?.result?.[0]?.calendarEvents?.earnings?.earningsDate?.[0]?.raw;
+    return raw ? new Date(raw * 1000) : null;
+  } catch { return null; }
+}
+
 // ─── Natural-language explanation ────────────────────────────────────────────
 
 function generateExplanation(symbol, rec, dcaScore, allocationPct, signals, scoreBreakdown, market, riskFlags, fundamentalData) {
@@ -474,8 +541,8 @@ function generateExplanation(symbol, rec, dcaScore, allocationPct, signals, scor
   if (signals.maTrend?.score === 2) bullish.push('a golden cross (MA20 above MA50 with price above both, confirming an uptrend)');
   else if (signals.maTrend?.score === 0) bearish.push('a downtrend (price below both MA20 and MA50)');
 
-  if (signals.rsi?.score === 2) bullish.push(`an oversold RSI of ${rsi} suggesting the recent selloff may be overdone`);
-  else if (signals.rsi?.score === 0 && rsi > 70) bearish.push(`an overbought RSI of ${rsi} indicating the stock is extended and due for a pullback`);
+  if (signals.rsi?.score === 2) bullish.push(`RSI historically oversold (${signals.rsi.value}) — the recent selloff appears overdone relative to this stock's own history`);
+  else if (signals.rsi?.score === 0) bearish.push(`RSI historically overbought (${signals.rsi.value}) — extended relative to its own history`);
 
   if (signals.orderFlow?.score === 2) bullish.push(`net buying pressure over the last 20 sessions (delta: ${signals.orderFlow.value})`);
   else bearish.push(`net selling pressure over the last 20 sessions (delta: ${signals.orderFlow?.value})`);
@@ -493,8 +560,8 @@ function generateExplanation(symbol, rec, dcaScore, allocationPct, signals, scor
   if (signals.spyRegime?.score === 2) bullish.push('the broad market (SPY) in a confirmed uptrend above its 50-day average');
   else if (signals.spyRegime?.score === 0) bearish.push('the broad market (SPY) in a downtrend — macro headwinds reduce the probability of any individual stock recovering');
 
-  if (signals.vix?.score === 2) bullish.push(`elevated market fear (VIX ${signals.vix.value}) historically creating good DCA entry points`);
-  else if (signals.vix?.score === 0) bearish.push(`low market fear (VIX ${signals.vix.value}) suggesting complacency — little margin of safety is priced in`);
+  if (signals.vix?.score === 2) bullish.push(`elevated market fear (VIX ${signals.vix.value}) — in the upper quartile of recent history, historically a good DCA window`);
+  else if (signals.vix?.score === 0) bearish.push(`low market fear (VIX ${signals.vix.value}) — in the bottom quartile of recent history, suggesting complacency`);
 
   if (signals.sectorStrength?.score === 2) bullish.push(`outperformance versus its sector ETF (${signals.sectorStrength.value}) showing relative strength`);
   else if (signals.sectorStrength?.score === 0) bearish.push(`underperformance versus its sector ETF (${signals.sectorStrength.value}), which may indicate stock-specific weakness`);
@@ -568,12 +635,13 @@ async function analyzeDCA(symbol, options = {}) {
   const sectorEtf = SECTOR_ETF[symbol.toUpperCase()];
 
   // All external fetches run in parallel
-  const [stockResult, spyResult, vixResult, sectorResult, fundResult] = await Promise.allSettled([
+  const [stockResult, spyResult, vixResult, sectorResult, fundResult, earningsResult] = await Promise.allSettled([
     fetchYahooChartData(symbol),
-    fetchQuickChartData('SPY'),
-    fetchQuickChartData('^VIX'),
+    fetchQuickChartData('SPY', '1y'),
+    fetchQuickChartData('^VIX', '1y'),
     sectorEtf ? fetchQuickChartData(sectorEtf) : Promise.resolve(null),
-    options.yahooOnly ? Promise.resolve(null) : fetchAlphaVantageFundamentals(symbol)
+    options.yahooOnly ? Promise.resolve(null) : fetchAlphaVantageFundamentals(symbol),
+    options.yahooOnly ? Promise.resolve(null) : fetchEarningsDate(symbol)
   ]);
 
   if (stockResult.status !== 'fulfilled') {
@@ -596,6 +664,7 @@ async function analyzeDCA(symbol, options = {}) {
   const vixData = vixResult.status === 'fulfilled' ? vixResult.value : null;
   const sectorData = sectorResult.status === 'fulfilled' ? sectorResult.value : null;
   const fundamentalData = fundResult.status === 'fulfilled' ? fundResult.value : null;
+  const earningsDate = earningsResult?.status === 'fulfilled' ? earningsResult.value : null;
 
   if (fundamentalData) console.log('✅ Fundamental data loaded');
   else errors.push(`Fundamentals: ${fundResult.reason?.message}`);
@@ -612,15 +681,17 @@ async function analyzeDCA(symbol, options = {}) {
 
   let technicalScore = 0;
 
-  // RSI (0–2): oversold is bullish only when price isn't already collapsing below MA50
+  // RSI (0–2): percentile-based — how oversold is this stock vs its own history?
   const rsi = parseFloat(d.rsi);
-  let rsiScore = 0;
+  const rsiPct = d.rsiPercentile ?? 50;
+  let rsiScore = 0, rsiLabel = 'Neutral';
   if (!isNaN(rsi)) {
-    if (rsi < 30) rsiScore = cp > d.ma50Raw ? 2 : 1; // discount if below MA50
-    else if (rsi <= 70) rsiScore = 1;
-    else rsiScore = 0;
+    if (rsiPct <= 15) { rsiScore = cp > d.ma50Raw ? 2 : 1; rsiLabel = `Historically Oversold (${rsiPct}th pct)`; }
+    else if (rsiPct <= 40) { rsiScore = 1; rsiLabel = `Below-avg RSI (${rsiPct}th pct)`; }
+    else if (rsiPct >= 85) { rsiScore = 0; rsiLabel = `Historically Overbought (${rsiPct}th pct)`; }
+    else { rsiScore = 1; rsiLabel = `Neutral (${rsiPct}th pct)`; }
   }
-  signals.rsi = { score: rsiScore, max: 2, label: rsi < 30 ? 'Oversold' : rsi > 70 ? 'Overbought' : 'Neutral', value: rsi.toFixed(1) };
+  signals.rsi = { score: rsiScore, max: 2, label: rsiLabel, value: `${rsi.toFixed(1)} (${rsiPct}th pct)` };
   technicalScore += rsiScore;
 
   // POC proximity (0–2)
@@ -628,10 +699,12 @@ async function analyzeDCA(symbol, options = {}) {
   signals.poc = { score: pocScore, max: 2, label: distToPOC < 5 ? 'At POC' : distToPOC < 10 ? 'Near POC' : 'Far from POC', value: `${distToPOC.toFixed(1)}%` };
   technicalScore += pocScore;
 
-  // Order flow (0–2)
-  const flowScore = d.orderFlowDelta > 0 ? 2 : 0;
+  // Order flow (0–2): magnitude percentile — strong net buying vs own history
+  const flowPct = d.flowPercentile ?? 50;
   const flowM = Math.round(Math.abs(d.orderFlowDelta) / 1e6);
-  signals.orderFlow = { score: flowScore, max: 2, label: d.orderFlowDelta > 0 ? 'Bullish' : 'Bearish', value: `${d.orderFlowDelta > 0 ? '+' : '-'}${flowM}M` };
+  const flowScore = flowPct >= 70 ? 2 : flowPct >= 40 ? 1 : 0;
+  const flowLabel = flowPct >= 70 ? `Strong Buying (${flowPct}th pct)` : flowPct >= 40 ? `Mild Buying (${flowPct}th pct)` : `Selling Pressure (${flowPct}th pct)`;
+  signals.orderFlow = { score: flowScore, max: 2, label: flowLabel, value: `${d.orderFlowDelta > 0 ? '+' : '-'}${flowM}M` };
   technicalScore += flowScore;
 
   // MA trend (0–2): golden cross = price > MA20 AND MA20 > MA50
@@ -645,10 +718,12 @@ async function analyzeDCA(symbol, options = {}) {
   signals.volumeConfirm = { score: d.volConfirmScore, max: 2, label: d.volConfirmScore === 2 ? 'Strong Buy Volume' : d.volConfirmScore === 1 ? 'Moderate' : 'Sell Pressure', value: '' };
   technicalScore += d.volConfirmScore;
 
-  // Candlestick pattern (0–2)
-  const candleScore = (d.candlestickPattern === 'bullish_engulfing' || d.candlestickPattern === 'hammer') ? 2
+  // Candlestick pattern (0–2): bullish patterns score 2, neutral 1, bearish 0
+  const bullishCandles = ['bullish_engulfing', 'hammer', 'morning_star'];
+  const bearishCandles = ['bearish_engulfing', 'shooting_star', 'evening_star'];
+  const candleScore = bullishCandles.includes(d.candlestickPattern) ? 2
                     : d.candlestickPattern === 'doji' ? 1 : 0;
-  signals.candle = { score: candleScore, max: 2, label: d.candlestickPattern ? d.candlestickPattern.replace('_', ' ') : 'No pattern', value: '' };
+  signals.candle = { score: candleScore, max: 2, label: d.candlestickPattern ? d.candlestickPattern.replace(/_/g, ' ') : 'No pattern', value: '' };
   technicalScore += candleScore;
 
   // MACD (0–2): trend momentum direction + histogram expansion
@@ -708,28 +783,34 @@ async function analyzeDCA(symbol, options = {}) {
   signals.spyRegime = { score: spyScore, max: 2, label: spyLabel, value: spyData ? `$${spyData.currentPrice.toFixed(2)}` : 'N/A' };
   marketContextScore += spyScore;
 
-  // VIX fear gauge (0–2): high fear = good DCA entry
+  // VIX fear gauge (0–2): percentile-based — high fear relative to recent history = DCA opportunity
   let vixScore = 0, vixLabel = 'Unknown';
   const vixLevel = vixData?.currentPrice;
+  const vixCloses = vixData?.closes || [];
+  const vixPercentile = vixLevel && vixCloses.length > 20
+    ? Math.round(vixCloses.filter(v => v <= vixLevel).length / vixCloses.length * 100)
+    : 50;
   if (vixLevel) {
-    if (vixLevel > 30) { vixScore = 2; vixLabel = 'High Fear (opportunity)'; }
-    else if (vixLevel > 20) { vixScore = 1; vixLabel = 'Elevated'; }
-    else { vixScore = 0; vixLabel = 'Low Fear (complacent)'; }
+    if (vixPercentile >= 75) { vixScore = 2; vixLabel = `High Fear — ${vixPercentile}th pct (opportunity)`; }
+    else if (vixPercentile >= 45) { vixScore = 1; vixLabel = `Elevated — ${vixPercentile}th pct`; }
+    else { vixScore = 0; vixLabel = `Low Fear — ${vixPercentile}th pct (complacent)`; }
   }
   signals.vix = { score: vixScore, max: 2, label: vixLabel, value: vixLevel ? vixLevel.toFixed(1) : 'N/A' };
   marketContextScore += vixScore;
 
-  // Sector relative strength (0–2)
+  // Sector relative strength (0–2): avg of 20-day and 60-day outperformance
   let sectorScore = 0, sectorLabel = 'No sector data';
   if (sectorData) {
-    const diff = d.ret20 - sectorData.ret20;
-    if (diff > 0.02) { sectorScore = 2; sectorLabel = `Outperforming ${sectorEtf}`; }
-    else if (diff > -0.02) { sectorScore = 1; sectorLabel = `In-line with ${sectorEtf}`; }
-    else { sectorScore = 0; sectorLabel = `Underperforming ${sectorEtf}`; }
+    const diff20 = d.ret20 - sectorData.ret20;
+    const diff60 = (d.ret60 || d.ret20) - (sectorData.ret60 || sectorData.ret20);
+    const avgDiff = (diff20 + diff60) / 2;
+    if (avgDiff > 0.02) { sectorScore = 2; sectorLabel = `Outperforming ${sectorEtf} (20d & 60d)`; }
+    else if (avgDiff > -0.02) { sectorScore = 1; sectorLabel = `In-line with ${sectorEtf}`; }
+    else { sectorScore = 0; sectorLabel = `Underperforming ${sectorEtf} (20d & 60d)`; }
   }
   signals.sectorStrength = {
     score: sectorScore, max: 2, label: sectorLabel,
-    value: sectorData ? `${(d.ret20*100).toFixed(1)}% vs ${(sectorData.ret20*100).toFixed(1)}%` : 'N/A'
+    value: sectorData ? `20d: ${(d.ret20*100).toFixed(1)}% vs ${(sectorData.ret20*100).toFixed(1)}%` : 'N/A'
   };
   marketContextScore += sectorScore;
 
@@ -737,9 +818,17 @@ async function analyzeDCA(symbol, options = {}) {
 
   let priceActionScore = 0;
 
-  // 52-week position (0–2): lower third = best DCA value
-  const pos52Score = position52 < 0.33 ? 2 : position52 < 0.66 ? 1 : 0;
-  signals.position52 = { score: pos52Score, max: 2, label: position52 < 0.33 ? 'Near 52W Low' : position52 < 0.66 ? 'Mid Range' : 'Near 52W High', value: `${(position52*100).toFixed(0)}% of range` };
+  // 52W position (0–2): lower range is better; reward recovery (uptrend from low), penalize continued fall
+  const recovering = (d.ret10 || 0) > 0.01;
+  const pos52Score = position52 < 0.33
+    ? (recovering ? 2 : 1)     // Low range: recovering = 2, still falling = 1
+    : position52 < 0.66
+      ? (recovering ? 1 : 0)   // Mid range: recovering = 1, falling = 0
+      : 0;                       // High range: always 0
+  const pos52Label = position52 < 0.33
+    ? (recovering ? 'Near Low + Recovering' : 'Near Low — Still Falling')
+    : position52 < 0.66 ? 'Mid Range' : 'Near 52W High';
+  signals.position52 = { score: pos52Score, max: 2, label: pos52Label, value: `${(position52*100).toFixed(0)}% of range` };
   priceActionScore += pos52Score;
 
   // Drawdown from 52-week high (0–2): deeper discount = more DCA value
@@ -748,26 +837,39 @@ async function analyzeDCA(symbol, options = {}) {
   signals.drawdown = { score: drawdownScore, max: 2, label: `${drawdown.toFixed(1)}% off 52W high`, value: `$${d.high52Week?.toFixed(2)} → $${cp?.toFixed(2)}` };
   priceActionScore += drawdownScore;
 
-  // Support proximity (0–2): bounce from a swing-low support is a stronger entry
-  let supportScore = 0, supportLabel = 'No clear support';
-  if (d.nearestSupport) {
-    const distToSupport = Math.abs(cp - parseFloat(d.nearestSupport)) / cp * 100;
-    if (distToSupport < 3) { supportScore = 2; supportLabel = 'At support'; }
-    else if (distToSupport < 7) { supportScore = 1; supportLabel = 'Near support'; }
-    else { supportScore = 0; supportLabel = 'Far from support'; }
+  // Support proximity (0–2): swing-low support OR MA200 acting as dynamic support
+  let supportScore = 0, supportLabel = 'No clear support', bestSupportPrice = null;
+  const supportCandidates = [];
+  if (d.nearestSupport) supportCandidates.push({ price: parseFloat(d.nearestSupport), type: 'swing low' });
+  if (d.ma200Raw && cp > d.ma200Raw) supportCandidates.push({ price: d.ma200Raw, type: 'MA200' });
+  if (supportCandidates.length) {
+    const best = supportCandidates.reduce((a, b) => Math.abs(cp - a.price) <= Math.abs(cp - b.price) ? a : b);
+    const dist = Math.abs(cp - best.price) / cp * 100;
+    bestSupportPrice = best.price;
+    if (dist < 3) { supportScore = 2; supportLabel = `At ${best.type} support`; }
+    else if (dist < 7) { supportScore = 1; supportLabel = `Near ${best.type} support`; }
+    else { supportScore = 0; supportLabel = `Far from support`; }
   }
-  signals.support = { score: supportScore, max: 2, label: supportLabel, value: d.nearestSupport ? `$${d.nearestSupport}` : 'N/A' };
+  signals.support = { score: supportScore, max: 2, label: supportLabel, value: bestSupportPrice ? `$${bestSupportPrice.toFixed(2)}` : 'N/A' };
   priceActionScore += supportScore;
 
   // ── 4. FUNDAMENTAL SCORE (0–8, if available) ──────────────────────────────
 
   let fundamentalScore = 0, fundamentalMax = 0;
   if (fundamentalData) {
-    fundamentalMax = 8;
-    if (d.pe) fundamentalScore += d.pe < 20 ? 2 : d.pe < 25 ? 1 : 0;
+    fundamentalMax = 9; // 8 base + 1 forward PE bonus
+    // P/E: sector-relative (vs fixed threshold)
+    const sectorPeMedian = SECTOR_PE_MEDIAN[sectorEtf] || 20;
+    if (d.pe) {
+      const peRatio = d.pe / sectorPeMedian;
+      fundamentalScore += peRatio < 0.8 ? 2 : peRatio < 1.1 ? 1 : 0;
+    }
     if (d.roe) fundamentalScore += d.roe > 0.15 ? 2 : d.roe > 0.08 ? 1 : 0;
     if (d.profitMargin) fundamentalScore += d.profitMargin > 0.20 ? 2 : d.profitMargin > 0.10 ? 1 : 0;
     if (d.revenueGrowthYOY != null) fundamentalScore += d.revenueGrowthYOY > 0.10 ? 2 : d.revenueGrowthYOY > 0 ? 1 : 0;
+    // Forward P/E bonus: if forward P/E < trailing P/E, earnings expected to grow
+    if (d.forwardPE && d.pe && d.forwardPE < d.pe * 0.95) fundamentalScore += 1;
+    fundamentalScore = Math.min(fundamentalScore, fundamentalMax);
   }
 
   // ── 5. RISK MODIFIERS ─────────────────────────────────────────────────────
@@ -783,7 +885,10 @@ async function analyzeDCA(symbol, options = {}) {
     riskModifier *= 0.90;
     riskFlags.push(`${d.streak.streak} consecutive down days — momentum dump risk`);
   }
-  if (d.ma200Raw && cp < d.ma200Raw) {
+  if (d.ma50Raw && cp < d.ma50Raw && d.ma200Raw && cp < d.ma200Raw) {
+    riskModifier *= 0.86; // confirmed downtrend on both timeframes — backtest showed this is the danger zone
+    riskFlags.push(`Below MA50 & MA200 — confirmed downtrend on both timeframes`);
+  } else if (d.ma200Raw && cp < d.ma200Raw) {
     riskModifier *= 0.93;
     riskFlags.push(`Below MA200 ($${d.ma200}) — long-term downtrend`);
   }
@@ -791,12 +896,41 @@ async function analyzeDCA(symbol, options = {}) {
     riskModifier *= 0.95;
     riskFlags.push('Bearish engulfing candle — reversal signal');
   }
+  if (d.candlestickPattern === 'shooting_star' || d.candlestickPattern === 'evening_star') {
+    riskModifier *= 0.95;
+    riskFlags.push(`${d.candlestickPattern.replace(/_/g, ' ')} candle — potential bearish reversal`);
+  }
+  if (earningsDate) {
+    const daysToEarnings = Math.round((earningsDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysToEarnings >= 0 && daysToEarnings <= 7) {
+      riskModifier *= 0.85;
+      riskFlags.push(`Earnings in ${daysToEarnings} day${daysToEarnings === 1 ? '' : 's'} — high binary risk, consider waiting`);
+    } else if (daysToEarnings > 7 && daysToEarnings <= 14) {
+      riskModifier *= 0.93;
+      riskFlags.push(`Earnings in ${daysToEarnings} days — elevated uncertainty`);
+    }
+  }
 
   // ── 6. FINAL SCORE + RECOMMENDATION ──────────────────────────────────────
 
-  // Axis weights and tier cutoffs
-  const AXIS_WEIGHT_ENTRY = 0.5, AXIS_WEIGHT_QUALITY = 0.5;
-  const TIER_HI = 58, TIER_LO = 42;
+  // Regime-adaptive axis weights: bear market → entry matters more; bull market → quality matters more
+  let AXIS_WEIGHT_ENTRY, AXIS_WEIGHT_QUALITY;
+  if (spyData && spyData.ma200 && spyData.currentPrice < spyData.ma200) {
+    AXIS_WEIGHT_ENTRY = 0.65; AXIS_WEIGHT_QUALITY = 0.35; // Bear: buy cheap, quality less predictive
+  } else if (spyData && spyData.currentPrice > spyData.ma50) {
+    AXIS_WEIGHT_ENTRY = 0.40; AXIS_WEIGHT_QUALITY = 0.60; // Bull: momentum & quality lead
+  } else {
+    AXIS_WEIGHT_ENTRY = 0.50; AXIS_WEIGHT_QUALITY = 0.50; // Transitional
+  }
+  // Regime-adaptive tier thresholds: bull markets inflate quality signals, so raise the bar for "mid-entry"
+  let TIER_HI, TIER_LO;
+  if (spyData && spyData.ma200 && spyData.currentPrice < spyData.ma200) {
+    TIER_HI = 54; TIER_LO = 38; // Bear: dips are genuine opportunities, lower bar to act
+  } else if (spyData && spyData.currentPrice > spyData.ma50) {
+    TIER_HI = 62; TIER_LO = 46; // Bull: quality signals inflate, require a real pullback to count as mid-entry
+  } else {
+    TIER_HI = 58; TIER_LO = 42; // Transitional: baseline
+  }
 
   // Entry axis (max 16): timing / valuation signals
   const entryMax = 16;
@@ -840,8 +974,24 @@ async function analyzeDCA(symbol, options = {}) {
 
   const q = QUADRANT[entryTier][qualityTier];
   const recommendation = q.recommendation;
-  const allocationPct  = q.allocationPct;
+  let allocationPct  = q.allocationPct;
   const dcaScore       = blendedScore;
+
+  // Quality gate: ACCUMULATE with borderline quality (58–69) is worse than WAIT per backtest.
+  // Only deploy full 50% when quality is genuinely strong (≥70).
+  if (recommendation.includes('ACCUMULATE') && qualityScore < 70) {
+    allocationPct = 25;
+  }
+
+  // Portfolio weight cap: if this position is already concentrated, reduce new deployment
+  const portfolioWeight = parseFloat(options.portfolioWeight) || 0;
+  if (portfolioWeight > 30 && allocationPct > 25) {
+    allocationPct = 25;
+    riskFlags.push(`Position already ${portfolioWeight.toFixed(0)}% of portfolio — allocation capped to avoid over-concentration`);
+  } else if (portfolioWeight > 20 && allocationPct > 50) {
+    allocationPct = 50;
+    riskFlags.push(`Position at ${portfolioWeight.toFixed(0)}% of portfolio — allocation reduced to manage concentration`);
+  }
 
   // Legacy ratios kept for scoreBreakdown (UI reads these)
   const techRatio  = technicalScore / 20;
@@ -902,7 +1052,8 @@ async function analyzeDCA(symbol, options = {}) {
       spyRegime: spyLabel,
       vixLevel: vixLevel?.toFixed(1) || null,
       sectorEtf: sectorEtf || null,
-      streak: d.streak
+      streak: d.streak,
+      ret10: d.ret10
     },
     technical: {
       rsi: d.rsi,
@@ -1022,7 +1173,8 @@ const server = http.createServer(async (req, res) => {
 
   if (parsedUrl.pathname === '/api/analyze' && parsedUrl.query.symbol) {
     try {
-      const result = await analyzeDCA(parsedUrl.query.symbol);
+      const portfolioWeight = parsedUrl.query.portfolioWeight ? parseFloat(parsedUrl.query.portfolioWeight) : null;
+      const result = await analyzeDCA(parsedUrl.query.symbol, { portfolioWeight });
       res.writeHead(200);
       res.end(JSON.stringify(result, null, 2));
     } catch (e) {
@@ -1128,6 +1280,46 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500);
       res.end(JSON.stringify({ error: e.message }));
     }
+  } else if (parsedUrl.pathname === '/api/portfolio' && req.method === 'GET') {
+    res.writeHead(200);
+    res.end(JSON.stringify(readPortfolio()));
+  } else if (parsedUrl.pathname === '/api/portfolio' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        fs.writeFileSync(portfolioDataPath, JSON.stringify(data, null, 2));
+        res.writeHead(200);
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+  } else if (parsedUrl.pathname === '/api/portfolio/history' && req.method === 'GET') {
+    res.writeHead(200);
+    res.end(JSON.stringify(readPortfolioHistory()));
+  } else if (parsedUrl.pathname === '/api/portfolio/snapshot' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      try {
+        const snapshot = JSON.parse(body);
+        const history = readPortfolioHistory();
+        const today = snapshot.date.slice(0, 10);
+        const idx = history.findIndex(s => s.date.slice(0, 10) === today);
+        if (idx >= 0) history[idx] = snapshot;
+        else history.push(snapshot);
+        history.sort((a, b) => a.date < b.date ? -1 : 1);
+        fs.writeFileSync(portfolioHistoryPath, JSON.stringify(history, null, 2));
+        res.writeHead(200);
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
   } else {
     res.writeHead(404);
     res.end(JSON.stringify({ error: 'Not found' }));
