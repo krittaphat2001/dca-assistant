@@ -573,11 +573,32 @@ async function fetchEarningsDate(symbol) {
   } catch { return null; }
 }
 
+// Classify a fund by asset class so return thresholds match the asset type
+// (a 4%/yr bond fund is good; a 4%/yr equity fund is weak). Uses Morningstar-
+// style category names first, then asset allocation as a fallback.
+function classifyFund(fs) {
+  const cat = (fs.category || '').toLowerCase();
+  if (/money market/.test(cat)) return 'moneymarket';
+  if (/bond|muni|treasury|fixed income|inflation.protected|ultrashort/.test(cat)) return 'bond';
+
+  const aa = fs.assetAllocation || {};
+  if (aa.stock != null || aa.bond != null || aa.cash != null) {
+    const stock = aa.stock ?? 0, bond = aa.bond ?? 0, cash = aa.cash ?? 0;
+    if (cash >= 60 && stock < 20 && bond < 20) return 'moneymarket';
+    if (bond > stock && bond >= 50)            return 'bond';
+    if (stock >= 60 && bond < 15)              return 'equity';
+    if (stock > 0 && bond > 0)                 return 'allocation';
+    if (stock >= 60)                           return 'equity';
+  }
+  return 'equity';
+}
+
 // Fund-quality score (0–100) derived from factsheet data. Standalone — does NOT
 // feed the DCA score. Encodes the four pillars: cost, track record,
 // diversification, and risk/size. Pure function so thresholds are easy to tune.
 function scoreFundQuality(fs) {
   const comps = [];
+  const fundClass = classifyFund(fs);
 
   // ── 1. Expense ratio (30) — the single biggest long-run predictor; lower is better
   const er = fs.expenseRatio;
@@ -604,13 +625,22 @@ function scoreFundQuality(fs) {
 
   const ltRet = fs.performance?.tenYear ?? fs.performance?.fiveYear ?? null;
   const ltLbl = fs.performance?.tenYear != null ? '10Y' : '5Y';
+  // Return bands [strong, solid, modest, breakeven] scaled to each asset class.
+  // Bonds/money-market earn far less than equities, so their "strong" bar is lower.
+  const RET_BANDS = {
+    equity:      [12, 8, 5, 0],
+    allocation:  [8, 5.5, 3, 0],
+    bond:        [5, 3, 1.5, 0],
+    moneymarket: [3, 1.5, 0.5, 0]
+  };
+  const [bStrong, bSolid, bModest, bBreak] = RET_BANDS[fundClass];
   let retScore, retNote;
-  if (ltRet == null)    { retScore = 7;  retNote = 'no long-term return'; }
-  else if (ltRet >= 12) { retScore = 15; retNote = `${ltLbl} ${ltRet}%/yr — strong`; }
-  else if (ltRet >= 8)  { retScore = 12; retNote = `${ltLbl} ${ltRet}%/yr — solid`; }
-  else if (ltRet >= 5)  { retScore = 8;  retNote = `${ltLbl} ${ltRet}%/yr — modest`; }
-  else if (ltRet >= 0)  { retScore = 4;  retNote = `${ltLbl} ${ltRet}%/yr — weak`; }
-  else                  { retScore = 0;  retNote = `${ltLbl} ${ltRet}%/yr — negative`; }
+  if (ltRet == null)          { retScore = 7;  retNote = 'no long-term return'; }
+  else if (ltRet >= bStrong)  { retScore = 15; retNote = `${ltLbl} ${ltRet}%/yr — strong`; }
+  else if (ltRet >= bSolid)   { retScore = 12; retNote = `${ltLbl} ${ltRet}%/yr — solid`; }
+  else if (ltRet >= bModest)  { retScore = 8;  retNote = `${ltLbl} ${ltRet}%/yr — modest`; }
+  else if (ltRet >= bBreak)   { retScore = 4;  retNote = `${ltLbl} ${ltRet}%/yr — weak`; }
+  else                        { retScore = 0;  retNote = `${ltLbl} ${ltRet}%/yr — negative`; }
   comps.push({ label: 'Track Record', score: longevity + retScore, max: 30, detail: `${longNote}; ${retNote}` });
 
   // ── 3. Diversification (20) = top-10 concentration (12) + sector spread (8)
@@ -660,7 +690,7 @@ function scoreFundQuality(fs) {
                 : total >= 40 ? 'Mediocre — proceed with care'
                 : 'Weak on the fundamentals';
 
-  return { score: total, grade, verdict, components: comps };
+  return { score: total, grade, verdict, assetClass: fundClass, components: comps };
 }
 
 // Fund factsheet (ETFs / mutual funds only). Returns null for ordinary stocks,
@@ -1554,4 +1584,4 @@ server.listen(CONFIG.port, () => {
   `);
 });
 
-module.exports = { analyzeDCA, fetchYahooChartData, fetchAlphaVantageFundamentals, fetchFundFactsheet, scoreFundQuality };
+module.exports = { analyzeDCA, fetchYahooChartData, fetchAlphaVantageFundamentals, fetchFundFactsheet, scoreFundQuality, classifyFund };
