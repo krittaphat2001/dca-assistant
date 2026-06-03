@@ -630,6 +630,71 @@
         .port-budget-wrap input { padding: 9px 12px; border: 2px solid #667eea55; border-radius: 6px; font-size: 14px; width: 130px; color: #333; }
         .port-budget-wrap input:focus { outline: none; border-color: #667eea; }
 
+        /* ── Allocation overview (3 sleeves) ── */
+        .port-alloc-wrap { padding: 16px 30px 4px; }
+        .port-alloc-title { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .port-alloc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+        .port-alloc-card { border: 1px solid #e3e6ec; border-top: 3px solid var(--c); border-radius: 8px; padding: 14px 16px; background: #fff; }
+        .port-alloc-head { display: flex; align-items: baseline; gap: 7px; margin-bottom: 2px; }
+        .port-alloc-emoji { font-size: 17px; }
+        .port-alloc-name { font-size: 13px; font-weight: 700; color: #333; }
+        .port-alloc-blurb { font-size: 11px; color: #999; line-height: 1.4; margin-bottom: 10px; min-height: 30px; }
+        .port-alloc-figs { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 8px; }
+        .port-alloc-cur { font-size: 26px; font-weight: 800; color: var(--c); line-height: 1; }
+        .port-alloc-cur small { font-size: 13px; font-weight: 600; }
+        .port-alloc-val { font-size: 11px; color: #888; text-align: right; }
+        .port-alloc-bar { position: relative; background: #eef0f4; border-radius: 4px; height: 8px; margin-bottom: 8px; overflow: hidden; }
+        .port-alloc-bar-fill { height: 8px; border-radius: 4px; background: var(--c); transition: width 0.4s; }
+        .port-alloc-bar-target { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #333; }
+        .port-alloc-targetrow { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666; }
+        .port-alloc-targetrow input { width: 52px; padding: 4px 6px; border: 1px solid #d4d8e0; border-radius: 5px; font-size: 12px; text-align: right; }
+        .port-alloc-targetrow input:focus { outline: none; border-color: var(--c); }
+        .port-alloc-delta { font-weight: 700; margin-left: auto; }
+        .port-alloc-delta.under { color: #e53935; }
+        .port-alloc-delta.over  { color: #fb8c00; }
+        .port-alloc-delta.ok    { color: #43a047; }
+        .port-alloc-tip { margin-top: 12px; font-size: 12px; color: #555; background: #f8f9fb; border: 1px solid #e8ebf1; border-radius: 7px; padding: 9px 13px; line-height: 1.5; }
+
+        /* ── Sleeve grouping in holdings table ── */
+        .port-group-row td { background: var(--c-soft) !important; border-top: 2px solid var(--c) !important; padding: 9px 14px !important; }
+        .port-group-row:hover td { background: var(--c-soft) !important; }
+        .port-group-emoji { font-size: 15px; margin-right: 6px; }
+        .port-group-name { font-weight: 800; color: #333; font-size: 13px; }
+        .port-group-blurb { font-size: 11px; color: #999; font-weight: 400; margin-left: 8px; }
+        .port-group-stats { float: right; font-size: 12px; color: #555; font-weight: 600; }
+        .port-group-stats .sub { color: #999; font-weight: 400; }
+        .port-sleeve-select { font-size: 10px; color: #777; border: 1px solid #dde1e8; border-radius: 5px; padding: 1px 4px; margin-top: 3px; background: #fafbfc; cursor: pointer; max-width: 132px; }
+        .port-sleeve-select:focus { outline: none; border-color: #667eea; }
+        .port-sleeve-auto { font-size: 9px; color: #aaa; margin-left: 3px; }
+
+        /* ── Portfolio Review ── */
+        .port-review-wrap { padding: 16px 30px 4px; }
+        .port-review-header { cursor: pointer; user-select: none; }
+        .port-review-header:hover .port-review-chevron { color: #555; }
+        .port-review-subtitle { font-weight: 400; text-transform: none; letter-spacing: 0; color: #999; font-size: 11px; }
+        .port-review-headgrade { margin-left: auto; font-size: 12px; }
+        .port-review-chevron { margin-left: 12px; color: #aaa; font-size: 13px; transition: transform 0.2s; }
+        .port-review-header.collapsed .port-review-chevron { transform: rotate(-90deg); }
+        @media (max-width: 620px) { .port-review-subtitle { display: none; } }
+        .port-review-card { border: 1px solid #e3e6ec; border-radius: 10px; padding: 18px 20px; background: #fff; }
+        .port-review-top { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #f0f0f0; padding-bottom: 14px; margin-bottom: 14px; }
+        .port-review-scorebox { text-align: center; min-width: 96px; }
+        .port-review-grade { font-size: 44px; font-weight: 800; line-height: 1; }
+        .port-review-score { font-size: 12px; color: #888; margin-top: 4px; font-weight: 600; }
+        .port-review-verdict { flex: 1; min-width: 240px; }
+        .port-review-verdict-title { font-size: 16px; font-weight: 700; color: #333; margin-bottom: 3px; }
+        .port-review-verdict-sub { font-size: 13px; color: #666; line-height: 1.5; }
+        .port-review-pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 26px; }
+        .port-review-pillar-detail { font-size: 11px; color: #999; margin-top: 3px; }
+        .port-review-note { font-size: 12px; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 12px; margin-top: 12px; }
+        .port-review-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px; }
+        @media (max-width: 760px) { .port-review-cols { grid-template-columns: 1fr; gap: 14px; } }
+        .port-review-col-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
+        .port-review-list { list-style: none; padding: 0; margin: 0; }
+        .port-review-list li { font-size: 13px; line-height: 1.55; color: #444; padding: 5px 0 5px 24px; position: relative; }
+        .port-review-list.port-crit li:before { content: '⚠️'; position: absolute; left: 0; }
+        .port-review-list.port-sugg li:before { content: '💡'; position: absolute; left: 0; }
+
         /* ── Scan Watchlist ── */
         .sidebar-footer {
             padding: 12px;
@@ -994,6 +1059,46 @@
                 <div class="port-insight-box" id="portInsightBox" style="display:none">
                     <div class="port-insight-title">💡 This Week's DCA Priority</div>
                     <div id="portInsightContent"></div>
+                </div>
+
+                <!-- Allocation Overview: 3 sleeves -->
+                <div class="port-alloc-wrap" id="portAllocWrap" style="display:none">
+                    <div class="port-alloc-title">🎯 Allocation by Type <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#999;font-size:11px">— current weight vs. your target. Reassign any holding's type in the table below.</span></div>
+                    <div class="port-alloc-grid" id="portAllocGrid"></div>
+                    <div class="port-alloc-tip" id="portAllocTip" style="display:none"></div>
+                </div>
+
+                <!-- Portfolio Review: score, critique, suggestions -->
+                <div class="port-review-wrap" id="portReviewWrap" style="display:none">
+                    <div class="port-alloc-title port-review-header" id="portReviewHeader" onclick="toggleReview()" title="Click to collapse / expand">
+                        <span>📋 Portfolio Review <span class="port-review-subtitle">— an honest score of how your book is built, what to watch, and what to do next.</span></span>
+                        <span class="port-review-headgrade" id="portReviewHeadGrade"></span>
+                        <span class="port-review-chevron" id="portReviewChevron">▾</span>
+                    </div>
+                    <div class="port-review-card" id="portReviewCard">
+                        <div class="port-review-top">
+                            <div class="port-review-scorebox">
+                                <div class="port-review-grade" id="portReviewGrade">—</div>
+                                <div class="port-review-score" id="portReviewScore"></div>
+                            </div>
+                            <div class="port-review-verdict">
+                                <div class="port-review-verdict-title" id="portReviewVerdict"></div>
+                                <div class="port-review-verdict-sub" id="portReviewVerdictSub"></div>
+                            </div>
+                        </div>
+                        <div class="port-review-pillars" id="portReviewPillars"></div>
+                        <div id="portReviewNote"></div>
+                        <div class="port-review-cols">
+                            <div>
+                                <div class="port-review-col-title" style="color:#c0392b">What to watch</div>
+                                <ul class="port-review-list port-crit" id="portReviewCrit"></ul>
+                            </div>
+                            <div>
+                                <div class="port-review-col-title" style="color:#1e8e3e">Suggestions</div>
+                                <ul class="port-review-list port-sugg" id="portReviewSugg"></ul>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Add Position Form -->
@@ -2063,6 +2168,10 @@
                             pos.explanation    = d.analysis.explanation || '';
                             pos.riskFlags      = d.analysis.riskFlags || [];
                             pos.sector         = d.fundamental?.sector || '';
+                            const betaRaw      = d.fundamental?.beta;
+                            pos.beta           = (betaRaw && betaRaw !== 'N/A') ? parseFloat(betaRaw)
+                                                 : (d.factsheet?.beta3Year ?? pos.beta ?? null);
+                            pos.assetClass     = d.factsheet?.fundQuality?.assetClass || pos.assetClass || null;
                             pos.lastUpdated    = new Date().toISOString();
                         }
                     }
@@ -2073,6 +2182,247 @@
             await saveSnapshot();
             btn.disabled = false;
             btn.textContent = '🔄 Refresh All';
+        }
+
+        // ── Sleeves: the 3 portfolio types ──────────────────────────
+        const SLEEVES = {
+            growth: { label: 'High Risk / High Return', emoji: '🚀', color: '#e53935', soft: '#fdecea',
+                      blurb: 'Aggressive growth — biggest upside, biggest swings', defaultTarget: 21 },
+            core:   { label: 'Moderate / Consistent',   emoji: '⚖️', color: '#1e88e5', soft: '#e9f1fb',
+                      blurb: 'Steady compounders & broad market — the backbone', defaultTarget: 60 },
+            safe:   { label: 'Safe Haven',              emoji: '🛡️', color: '#43a047', soft: '#eaf5ec',
+                      blurb: 'Holds up (or gains) in a crash — dry powder to deploy', defaultTarget: 19 },
+        };
+        const SLEEVE_ORDER = ['growth', 'core', 'safe'];
+
+        // Curated overrides for instruments where ticker alone is decisive
+        const SAFE_HAVEN_SYMBOLS = new Set([
+            'GLD','IAU','GLDM','SGOL','PHYS','BAR','GOLD',
+            'TLT','IEF','SHY','SHV','GOVT','VGSH','VGIT','VGLT','EDV','SCHQ','SPTL','SGOV','BIL',
+            'BND','AGG','BNDX','VCSH','MBB','TIP','VTIP','SCHP','MUB','USFR',
+            'UUP','BTAL','VIXY','VXX','SH','PHYS','CASH',
+            'O']);                                          // my holdings: O (Realty Income — defensive monthly-dividend REIT)
+        const GROWTH_SYMBOLS = new Set([
+            'TSLA','NVDA','AMD','PLTR','COIN','MSTR','MARA','RIOT','SMCI','ARM','AVGO',
+            'ARKK','ARKW','ARKG','ARKF','ARKQ','SOXL','TQQQ','UPRO','SOXX','SMH','TECL',
+            'RIVN','LCID','NIO','SHOP','SNOW','NET','CRWD','DDOG','RBLX','ROKU','U','AFRM','SOFI','HOOD',
+            'GME','AMC','SPCE','DKNG','UBER','ABNB','PATH','FUBO','BBAI','SOUN','IONQ','RGTI','MRNA',
+            'RBRK','ORCL']);                                // my holdings: RBRK (Rubrik), ORCL (Oracle — AI momentum); NVDA above
+        const CORE_SYMBOLS = new Set([
+            'VOO','VTI','SPY','IVV','SCHB','ITOT','SPLG','VT','VEA','VXUS','VTV','VYM','SCHD','DGRO','VIG','NOBL',
+            'JNJ','PG','KO','PEP','WMT','COST','HD','MCD','MSFT','AAPL','GOOGL','GOOG','V','MA',
+            'BRK.B','BRK-B','UNH','ABBV','JPM','HON','LIN','CAT',
+            'QQQ']);                                        // my holdings: QQQ (Nasdaq-100 backbone); VOO, SCHD, MSFT, GOOGL above
+
+        // Auto-detect a holding's sleeve from ticker, asset class, beta, then sector
+        function autoSleeve(p) {
+            const sym = (p.symbol || '').toUpperCase();
+            if (SAFE_HAVEN_SYMBOLS.has(sym)) return 'safe';
+            if (GROWTH_SYMBOLS.has(sym))     return 'growth';
+            if (CORE_SYMBOLS.has(sym))       return 'core';
+            if (p.assetClass === 'bond' || p.assetClass === 'moneymarket') return 'safe';
+            const b = p.beta;
+            if (b != null && !isNaN(b)) {
+                if (b <= 0.6) return 'safe';
+                if (b >= 1.3) return 'growth';
+                return 'core';
+            }
+            const sec = (p.sector || '').toLowerCase();
+            if (/utilit|staple/.test(sec)) return 'safe';
+            if (/technolog|communication|discretion/.test(sec)) return 'growth';
+            return 'core';
+        }
+        // Effective sleeve: manual override wins, else auto-detected
+        function sleeveOf(p) {
+            return (p.sleeve && SLEEVES[p.sleeve]) ? p.sleeve : autoSleeve(p);
+        }
+        function isAutoSleeve(p) { return !(p.sleeve && SLEEVES[p.sleeve]); }
+
+        function setSleeve(sym, val) {
+            const p = portfolio.positions.find(x => x.symbol === sym);
+            if (!p) return;
+            if (val === 'auto') delete p.sleeve; else p.sleeve = val;
+            savePortfolio();
+            renderPortfolio();
+        }
+        function targetFor(sleeve) {
+            const t = portfolio.targets;
+            if (t && t[sleeve] != null && !isNaN(t[sleeve])) return +t[sleeve];
+            return SLEEVES[sleeve].defaultTarget;
+        }
+        function setTarget(sleeve, val) {
+            if (!portfolio.targets) portfolio.targets = {};
+            const n = parseFloat(val);
+            portfolio.targets[sleeve] = isNaN(n) ? SLEEVES[sleeve].defaultTarget : Math.max(0, Math.min(100, n));
+            savePortfolio();
+            renderPortfolio();
+        }
+
+        // ── Portfolio Review: score / critique / suggest ────────────
+        // Symbols that actually hold up (or rise) in an equity crash
+        const TRUE_HEDGES = new Set([
+            'TLT','IEF','SHY','SHV','GOVT','VGSH','VGIT','VGLT','EDV','SCHQ','SPTL','SGOV','BIL','USFR',
+            'BND','AGG','BNDX','TIP','VTIP','SCHP','MUB','GLD','IAU','GLDM','SGOL','PHYS','BAR','UUP','BTAL','VIXY','VXX','SH']);
+        // Broad-market index funds and the mega-caps that dominate them (overlap check)
+        const BROAD_INDEX = new Set(['VOO','VTI','SPY','IVV','SPLG','ITOT','SCHB','QQQ','QQQM','VV','MGC']);
+        const MEGA_CAP    = new Set(['AAPL','MSFT','GOOGL','GOOG','NVDA','AMZN','META','AVGO','TSLA','ORCL']);
+
+        // Pure-ish: reads portfolio.positions + sleeveOf/targetFor, returns a full review or null
+        function computePortfolioReview() {
+            const pos = portfolio.positions;
+            if (!pos.length) return null;
+
+            let total = 0;
+            const items = pos.map(p => {
+                const val = p.shares * (p.currentPrice || p.avgCost);
+                total += val;
+                return { p, val, sleeve: sleeveOf(p) };
+            });
+            if (total <= 0) return null;
+            items.forEach(it => it.w = it.val / total * 100);
+
+            const n = pos.length;
+            const sorted = [...items].sort((a, b) => b.w - a.w);
+            const largest = sorted[0];
+            const top3 = sorted.slice(0, 3).reduce((s, it) => s + it.w, 0);
+
+            const sw = { growth: 0, core: 0, safe: 0 };
+            items.forEach(it => sw[it.sleeve] += it.w);
+
+            // value-weighted metric over positions that have it
+            const wAvg = sel => { let num = 0, den = 0; items.forEach(it => { const v = sel(it.p); if (v != null && !isNaN(v)) { num += v * it.val; den += it.val; } }); return den ? num / den : null; };
+            const wQuality = wAvg(p => p.qualityScore);
+            const wEntry   = wAvg(p => p.entryScore);
+            const wBeta    = wAvg(p => p.beta);
+
+            let extVal = 0;
+            items.forEach(it => { if ((it.p.rsi != null && it.p.rsi > 70) || (it.p.position52w != null && it.p.position52w >= 90)) extVal += it.val; });
+            const extPct = extVal / total * 100;
+
+            const flagCount = items.reduce((s, it) => s + ((it.p.riskFlags || []).length), 0);
+            const drift = ['growth', 'core', 'safe'].reduce((s, k) => s + Math.abs(sw[k] - targetFor(k)), 0);
+
+            // ── Pillars ──
+            const pillars = [];
+            const cN = n >= 8 ? 8 : n >= 6 ? 6 : n >= 4 ? 4 : 2;
+            const cL = largest.w < 15 ? 9 : largest.w < 25 ? 7 : largest.w < 35 ? 4 : largest.w < 50 ? 2 : 0;
+            const cT = top3 < 45 ? 8 : top3 < 60 ? 6 : top3 < 75 ? 3 : 1;
+            pillars.push({ label: 'Diversification', score: cN + cL + cT, max: 25, detail: `${n} holdings · largest ${largest.p.symbol} ${largest.w.toFixed(0)}% · top-3 ${top3.toFixed(0)}%` });
+
+            const aD = drift <= 10 ? 12 : drift <= 20 ? 9 : drift <= 35 ? 6 : drift <= 50 ? 3 : 1;
+            const aS = sw.safe >= 15 ? 8 : sw.safe >= 8 ? 6 : sw.safe >= 3 ? 3 : 0;
+            pillars.push({ label: 'Allocation vs Target', score: aD + aS, max: 20, detail: `drift ${drift.toFixed(0)} pts from target · safe-haven ${sw.safe.toFixed(0)}%` });
+
+            pillars.push(wQuality != null
+                ? { label: 'Business Quality', score: Math.round(wQuality / 100 * 20), max: 20, detail: `avg quality ${wQuality.toFixed(0)}/100 (value-weighted)` }
+                : { label: 'Business Quality', score: null, max: 20, detail: 'Refresh All to score' });
+
+            pillars.push(wEntry != null
+                ? { label: 'Entry / Valuation', score: Math.round(wEntry / 100 * 15), max: 15, detail: `avg entry ${wEntry.toFixed(0)}/100 · ${extPct.toFixed(0)}% of value overbought` }
+                : { label: 'Entry / Valuation', score: null, max: 15, detail: 'Refresh All to score' });
+
+            const rBeta = wBeta == null ? 5 : wBeta <= 0.9 ? 8 : wBeta <= 1.1 ? 7 : wBeta <= 1.3 ? 5 : wBeta <= 1.5 ? 3 : 1;
+            const rGrowth = sw.growth <= 25 ? 6 : sw.growth <= 40 ? 4 : sw.growth <= 55 ? 2 : 0;
+            const rFlag = flagCount === 0 ? 6 : flagCount <= 2 ? 4 : flagCount <= 4 ? 2 : 0;
+            pillars.push({ label: 'Risk Posture', score: rBeta + rGrowth + rFlag, max: 20, detail: `${wBeta != null ? 'β ' + wBeta.toFixed(2) : 'β n/a'} · growth ${sw.growth.toFixed(0)}% · ${flagCount} risk flag${flagCount !== 1 ? 's' : ''}` });
+
+            // Rescale over scored pillars
+            let got = 0, max = 0;
+            pillars.forEach(pl => { if (pl.score != null) { got += pl.score; max += pl.max; } });
+            const score = max > 0 ? Math.round(got / max * 100) : 0;
+            const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : score >= 40 ? 'D' : 'F';
+            const partial = pillars.some(pl => pl.score == null);
+
+            const scored = pillars.filter(pl => pl.score != null);
+            const best = scored.reduce((a, b) => (b.score / b.max > a.score / a.max ? b : a));
+            const worst = scored.reduce((a, b) => (b.score / b.max < a.score / a.max ? b : a));
+
+            const verdict = score >= 85 ? 'Well-built portfolio'
+                          : score >= 70 ? 'Solid — a few things to tidy up'
+                          : score >= 55 ? 'Decent core, with notable gaps'
+                          : score >= 40 ? 'Workable, but needs attention'
+                          : 'Fragile construction — rework recommended';
+            const verdictSub = `$${Math.round(total).toLocaleString()} across ${n} holdings · ${sw.growth.toFixed(0)}/${sw.core.toFixed(0)}/${sw.safe.toFixed(0)} growth/core/safe. Strongest: ${best.label}; weakest: ${worst.label}.`;
+
+            // ── Criticisms ──
+            const syms = pos.map(p => p.symbol);
+            const crit = [];
+            if (largest.w >= 30) crit.push(`<strong>${largest.p.symbol}</strong> is ${largest.w.toFixed(0)}% of the book — a single position above ~25% concentrates a lot of stock-specific risk.`);
+            else if (largest.w >= 25) crit.push(`${largest.p.symbol} (${largest.w.toFixed(0)}%) is your largest position and sits near the ~25% concentration line — worth watching.`);
+            if (top3 >= 65) crit.push(`Your top 3 holdings are ${top3.toFixed(0)}% of the portfolio — returns will hinge on just a few names.`);
+
+            const idx = syms.filter(s => BROAD_INDEX.has(s));
+            const mega = syms.filter(s => MEGA_CAP.has(s));
+            if (idx.length >= 1 && mega.length >= 2) crit.push(`You own broad index fund(s) (${idx.join(', ')}) <em>and</em> several of their biggest constituents individually (${mega.join(', ')}) — overlapping bets, so your true mega-cap/tech exposure is higher than the line items suggest.`);
+
+            const safeSyms = items.filter(it => it.sleeve === 'safe').map(it => it.p.symbol);
+            const realHedge = safeSyms.filter(s => TRUE_HEDGES.has(s));
+            if (sw.safe > 0 && realHedge.length === 0) crit.push(`Your Safe Haven sleeve (${safeSyms.join(', ')}) is equity/income, not a true crash hedge — it still falls in a sell-off. You hold no bonds, T-bills, or gold for genuine ballast.`);
+            else if (sw.safe < 5) crit.push(`Safe Haven is only ${sw.safe.toFixed(0)}% — thin dry powder if the market drops hard.`);
+
+            if (extPct >= 40) crit.push(`${extPct.toFixed(0)}% of the portfolio (by value) is overbought or within 10% of its 52-week high — lump-sum adds here carry pullback risk.`);
+
+            if (drift > 20) { const off = ['growth', 'core', 'safe'].map(k => ({ k, d: sw[k] - targetFor(k) })).sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0]; crit.push(`Allocation has drifted ${drift.toFixed(0)} pts from target — ${SLEEVES[off.k].emoji} ${SLEEVES[off.k].label} is ${Math.abs(off.d).toFixed(0)}% ${off.d > 0 ? 'over' : 'under'}.`); }
+            if (wBeta != null && wBeta > 1.3) crit.push(`Portfolio beta ≈ ${wBeta.toFixed(2)} — you'll swing meaningfully more than the market both ways.`);
+            if (!crit.length) crit.push('No major structural red flags — the portfolio is reasonably constructed.');
+
+            // ── Suggestions ──
+            const sugg = [];
+            if (realHedge.length === 0 || sw.safe < 8) sugg.push(`Add a genuine crash hedge — a Treasury or gold slice (e.g. <strong>SGOV/BIL</strong> for T-bills, <strong>TLT</strong> for long Treasuries, <strong>GLD</strong> for gold) so Safe Haven actually protects when stocks fall.`);
+            if (idx.length >= 1 && mega.length >= 2) sugg.push(`Stop adding to mega-caps you already own through ${idx.join('/')} — point new buys at under-represented areas (international, small/mid-cap, or value) for real diversification.`);
+            if (extPct >= 40) sugg.push(`With much of the book extended, spread new buys over several weeks rather than lump-sum — your per-holding “This Week %” already scales this.`);
+            if (drift > 15) sugg.push(`Rebalance toward target: steer this week's budget into the most-underweight sleeve highlighted in the allocation cards above.`);
+            if (largest.w >= 25) sugg.push(`Let new contributions dilute ${largest.p.symbol} back under 25%, or trim it on strength.`);
+            if (partial) sugg.push(`Hit <strong>🔄 Refresh All</strong> to score Business Quality & Valuation — they're not yet included above.`);
+            sugg.push(`Re-run this review periodically and rebalance only when a sleeve drifts >5–10% from target, to avoid over-trading.`);
+
+            return { score, grade, verdict, verdictSub, pillars, criticisms: crit, suggestions: sugg, partial };
+        }
+
+        function portReviewPillarHtml(pl) {
+            const pct = pl.score == null ? 0 : Math.round(pl.score / pl.max * 100);
+            const color = pl.score == null ? '#bbb' : pct >= 67 ? '#43a047' : pct >= 34 ? '#ff9800' : '#e53935';
+            const right = pl.score == null ? '<span style="color:#bbb;font-size:11px">n/a</span>' : `<span style="color:${color};font-weight:700">${pl.score}/${pl.max}</span>`;
+            return `<div>
+                <div class="port-score-bar-label"><span>${pl.label}</span>${right}</div>
+                <div class="port-score-bar-track"><div class="port-score-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+                <div class="port-review-pillar-detail">${pl.detail}</div>
+            </div>`;
+        }
+
+        let reviewCollapsed = false;
+        try { reviewCollapsed = localStorage.getItem('portReviewCollapsed') === '1'; } catch {}
+        function applyReviewCollapsed() {
+            const card = document.getElementById('portReviewCard');
+            const hdr = document.getElementById('portReviewHeader');
+            if (!card || !hdr) return;
+            card.style.display = reviewCollapsed ? 'none' : '';
+            hdr.classList.toggle('collapsed', reviewCollapsed);
+        }
+        function toggleReview() {
+            reviewCollapsed = !reviewCollapsed;
+            try { localStorage.setItem('portReviewCollapsed', reviewCollapsed ? '1' : '0'); } catch {}
+            applyReviewCollapsed();
+        }
+
+        function renderReview() {
+            const wrap = document.getElementById('portReviewWrap');
+            const r = computePortfolioReview();
+            if (!r) { wrap.style.display = 'none'; return; }
+            wrap.style.display = '';
+            const col = r.score >= 70 ? '#43a047' : r.score >= 55 ? '#1e88e5' : r.score >= 40 ? '#ff9800' : '#e53935';
+            document.getElementById('portReviewHeadGrade').innerHTML = `<span style="color:${col};font-weight:700">${r.grade} · ${r.score}/100</span>`;
+            applyReviewCollapsed();
+            const gEl = document.getElementById('portReviewGrade');
+            gEl.textContent = r.grade; gEl.style.color = col;
+            document.getElementById('portReviewScore').textContent = r.score + '/100';
+            document.getElementById('portReviewVerdict').textContent = r.verdict;
+            document.getElementById('portReviewVerdictSub').textContent = r.verdictSub;
+            document.getElementById('portReviewPillars').innerHTML = r.pillars.map(portReviewPillarHtml).join('');
+            document.getElementById('portReviewNote').innerHTML = r.partial
+                ? `<div class="port-review-note">⚠️ Business Quality & Valuation aren't scored yet — hit 🔄 Refresh All to include them in the grade.</div>` : '';
+            document.getElementById('portReviewCrit').innerHTML = r.criticisms.map(c => `<li>${c}</li>`).join('');
+            document.getElementById('portReviewSugg').innerHTML = r.suggestions.map(s => `<li>${s}</li>`).join('');
         }
 
         // ── Helpers ─────────────────────────────────────────────────
@@ -2164,6 +2514,18 @@
                 insightBox.style.display = 'none';
             }
 
+            // ── Per-sleeve aggregates (overview + table subtotals) ──
+            const sleeveAgg = { growth: { inv: 0, val: 0, n: 0 }, core: { inv: 0, val: 0, n: 0 }, safe: { inv: 0, val: 0, n: 0 } };
+            positions.forEach(p => {
+                const s = sleeveOf(p);
+                const inv = p.shares * p.avgCost;
+                sleeveAgg[s].inv += inv;
+                sleeveAgg[s].val += p.currentPrice ? p.shares * p.currentPrice : inv;
+                sleeveAgg[s].n++;
+            });
+            renderAllocation(sleeveAgg, totalValue, budget, fmt, fmt0);
+            renderReview();
+
             // ── Table ──
             const tbody = document.getElementById('portTableBody');
             if (positions.length === 0) {
@@ -2172,7 +2534,11 @@
             }
 
             const rows = [];
-            positions.forEach(p => {
+            SLEEVE_ORDER.forEach(sl => {
+                const group = positions.filter(p => sleeveOf(p) === sl);
+                if (!group.length) return;
+                rows.push(groupHeaderHtml(sl, sleeveAgg[sl], totalValue, fmt0));
+                group.forEach(p => {
                 const invested = p.shares * p.avgCost;
                 const val = p.currentPrice ? p.shares * p.currentPrice : null;
                 const rowPL = val != null ? val - invested : null;
@@ -2204,7 +2570,7 @@
                 const sectorTag = p.sector ? `<span style="font-size:10px;color:#888;font-weight:400;margin-left:4px">${p.sector}</span>` : '';
 
                 rows.push(`<tr class="port-main-row ${portTierClass(p.recommendation)}" onclick="toggleDetail('${p.symbol}')">
-                    <td><span class="port-symbol">${p.symbol}</span>${sectorTag}</td>
+                    <td><span class="port-symbol">${p.symbol}</span>${sectorTag}<div onclick="event.stopPropagation()">${sleeveSelectHtml(p)}</div></td>
                     <td>${p.shares}</td>
                     <td>$${fmt(invested)}</td>
                     <td>${val != null ? '$' + fmt(val) : '<span style="color:#ccc">—</span>'}</td>
@@ -2251,8 +2617,82 @@
                         </td>
                     </tr>`);
                 }
+                });
             });
             tbody.innerHTML = rows.join('');
+        }
+
+        // Group-header row spanning the holdings table, with sleeve subtotal
+        function groupHeaderHtml(sl, ag, totalValue, fmt0) {
+            const meta = SLEEVES[sl];
+            const gpl = ag.val - ag.inv;
+            const gplPct = ag.inv ? (gpl / ag.inv * 100) : 0;
+            const gWeight = totalValue > 0 ? (ag.val / totalValue * 100) : 0;
+            const gplCls = gpl >= 0 ? 'port-gain' : 'port-loss';
+            const gSign = gpl >= 0 ? '+' : '';
+            return `<tr class="port-group-row" style="--c:${meta.color};--c-soft:${meta.soft}">
+                <td colspan="10">
+                    <span class="port-group-emoji">${meta.emoji}</span><span class="port-group-name">${meta.label}</span>
+                    <span class="port-group-blurb">${meta.blurb}</span>
+                    <span class="port-group-stats">${ag.n} holding${ag.n !== 1 ? 's' : ''} <span class="sub">· $${fmt0(ag.val)} · ${gWeight.toFixed(0)}% wt ·</span> <span class="${gplCls}">${gSign}${gplPct.toFixed(1)}%</span></span>
+                </td>
+            </tr>`;
+        }
+
+        // Per-row sleeve selector (Auto + 3 explicit types)
+        function sleeveSelectHtml(p) {
+            const cur = (p.sleeve && SLEEVES[p.sleeve]) ? p.sleeve : 'auto';
+            const det = autoSleeve(p);
+            const opts = [`<option value="auto"${cur === 'auto' ? ' selected' : ''}>Auto · ${SLEEVES[det].emoji} ${SLEEVES[det].label}</option>`]
+                .concat(SLEEVE_ORDER.map(s => `<option value="${s}"${cur === s ? ' selected' : ''}>${SLEEVES[s].emoji} ${SLEEVES[s].label}</option>`));
+            return `<select class="port-sleeve-select" onchange="setSleeve('${p.symbol}', this.value)" title="Portfolio type — Auto-detected, change to override">${opts.join('')}</select>`;
+        }
+
+        // Allocation overview: 3 sleeve cards (current weight vs editable target) + rebalance tip
+        function renderAllocation(agg, totalValue, budget, fmt, fmt0) {
+            const wrap = document.getElementById('portAllocWrap');
+            const grid = document.getElementById('portAllocGrid');
+            const tipEl = document.getElementById('portAllocTip');
+            if (!portfolio.positions.length || totalValue <= 0) { wrap.style.display = 'none'; return; }
+            wrap.style.display = '';
+
+            grid.innerHTML = SLEEVE_ORDER.map(sl => {
+                const meta = SLEEVES[sl];
+                const cur = totalValue > 0 ? (agg[sl].val / totalValue * 100) : 0;
+                const tgt = targetFor(sl);
+                const delta = cur - tgt;
+                const dCls = Math.abs(delta) < 3 ? 'ok' : (delta < 0 ? 'under' : 'over');
+                const dTxt = Math.abs(delta) < 3 ? 'on target' : `${delta < 0 ? '▼' : '▲'} ${Math.abs(delta).toFixed(0)}% ${delta < 0 ? 'under' : 'over'}`;
+                return `<div class="port-alloc-card" style="--c:${meta.color}">
+                    <div class="port-alloc-head"><span class="port-alloc-emoji">${meta.emoji}</span><span class="port-alloc-name">${meta.label}</span></div>
+                    <div class="port-alloc-blurb">${meta.blurb}</div>
+                    <div class="port-alloc-figs">
+                        <div class="port-alloc-cur">${cur.toFixed(0)}<small>%</small></div>
+                        <div class="port-alloc-val">$${fmt0(agg[sl].val)}<br>${agg[sl].n} holding${agg[sl].n !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div class="port-alloc-bar"><div class="port-alloc-bar-fill" style="width:${Math.min(100, cur)}%"></div><div class="port-alloc-bar-target" style="left:${Math.min(100, tgt)}%"></div></div>
+                    <div class="port-alloc-targetrow">target <input type="number" min="0" max="100" step="1" value="${tgt}" onchange="setTarget('${sl}', this.value)" onclick="event.stopPropagation()">% <span class="port-alloc-delta ${dCls}">${dTxt}</span></div>
+                </div>`;
+            }).join('');
+
+            // Rebalance tip: the most-underweight sleeve is where new money does the most good
+            let worst = null, worstGap = 0;
+            SLEEVE_ORDER.forEach(sl => {
+                const gap = targetFor(sl) - (agg[sl].val / totalValue * 100);
+                if (gap > worstGap) { worstGap = gap; worst = sl; }
+            });
+            const tgtSum = SLEEVE_ORDER.reduce((s, sl) => s + targetFor(sl), 0);
+            let tip;
+            if (worst && worstGap >= 3) {
+                const meta = SLEEVES[worst];
+                const dollar = budget ? ` Of this week's $${fmt0(budget)} budget, steer new buys toward this sleeve to rebalance.` : '';
+                tip = `Your <strong style="color:${meta.color}">${meta.emoji} ${meta.label}</strong> sleeve is <strong>${worstGap.toFixed(0)}%</strong> below target — that's where adding now does the most to rebalance.${dollar}`;
+            } else {
+                tip = `Your allocation is close to target across all three types — nicely balanced.`;
+            }
+            if (Math.abs(tgtSum - 100) > 0.5) tip += ` <span style="color:#e67e22">Heads up: your targets sum to ${tgtSum.toFixed(0)}%, not 100%.</span>`;
+            tipEl.innerHTML = tip;
+            tipEl.style.display = '';
         }
 
         function renderHistory() {
