@@ -591,6 +591,63 @@ async function fetchEarningsDate(symbol) {
   } catch { return null; }
 }
 
+// Fetch S&P 500 total-return trailing returns to benchmark a fund against "the
+// market". Annualized for 3Y+, cumulative for YTD/1Y. `asOfMs` anchors the
+// windows to the fund's reporting date (Yahoo reports a fund's trailing returns
+// as-of a fixed, often month-end date) so the periods line up fairly.
+async function fetchBenchmarkReturns(symbol = '^SP500TR', asOfMs = null) {
+  const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=10y&includePrePost=false`;
+  const data = await makeRequest(u);
+  const r = data.chart?.result?.[0];
+  if (!r) return null;
+  const ts = r.timestamp || [];
+  const adj = r.indicators?.adjclose?.[0]?.adjclose || r.indicators?.quote?.[0]?.close || [];
+  const series = ts.map((t, i) => ({ t: t * 1000, c: adj[i] })).filter(p => p.c != null);
+  if (series.length < 60) return null;
+
+  // Anchor to the fund's as-of date (latest point at/before it), else the newest point.
+  let anchor = series.length - 1;
+  if (asOfMs) for (let i = 0; i < series.length; i++) { if (series[i].t <= asOfMs) anchor = i; else break; }
+  const last = series[anchor];
+
+  const closeYearsAgo = years => {
+    const target = last.t - years * 365.25 * 864e5;
+    let best = null;
+    for (let i = 0; i <= anchor; i++) { if (series[i].t <= target) best = series[i].c; else break; }
+    return best;
+  };
+  const cum = years => { const c0 = closeYearsAgo(years); return c0 ? +(((last.c / c0) - 1) * 100).toFixed(2) : null; };
+  const ann = years => { const c0 = closeYearsAgo(years); return c0 ? +((Math.pow(last.c / c0, 1 / years) - 1) * 100).toFixed(2) : null; };
+
+  // YTD: last close before Jan 1 of the anchor's year
+  const jan1 = new Date(new Date(last.t).getFullYear(), 0, 1).getTime();
+  let ytdBase = null;
+  for (let i = 0; i <= anchor; i++) { if (series[i].t < jan1) ytdBase = series[i].c; else break; }
+  const ytd = ytdBase ? +(((last.c / ytdBase) - 1) * 100).toFixed(2) : null;
+
+  return { ytd, oneYear: cum(1), threeYear: ann(3), fiveYear: ann(5), tenYear: ann(10) };
+}
+
+// Compare a fund's trailing returns against benchmark returns, period by period.
+// Pure function: returns per-period excess, plus a win count over comparable periods.
+function buildBenchmarkComparison(performance, benchReturns, name, symbol) {
+  if (!benchReturns) return null;
+  const periods = ['ytd', 'oneYear', 'threeYear', 'fiveYear', 'tenYear'];
+  const excess = {};
+  let wins = 0, comparable = 0;
+  for (const p of periods) {
+    const f = performance?.[p], b = benchReturns[p];
+    if (f != null && b != null) {
+      excess[p] = +(f - b).toFixed(2);
+      comparable++;
+      if (f >= b) wins++;
+    } else {
+      excess[p] = null;
+    }
+  }
+  return { name, symbol, returns: benchReturns, excess, wins, comparable };
+}
+
 // Classify a fund by asset class so return thresholds match the asset type
 // (a 4%/yr bond fund is good; a 4%/yr equity fund is weak). Uses Morningstar-
 // style category names first, then asset allocation as a fallback.
@@ -754,6 +811,7 @@ async function fetchFundFactsheet(symbol) {
       fiveYear:  pct(tr.fiveYear),
       tenYear:   pct(tr.tenYear)
     };
+    const perfAsOfMs = num(tr.asOfDate) ? num(tr.asOfDate) * 1000 : null;
 
     const prof = r.fundProfile || {};
     const ks = r.defaultKeyStatistics || {};
@@ -775,6 +833,14 @@ async function fetchFundFactsheet(symbol) {
       performance
     };
     out.fundQuality = scoreFundQuality(out);
+
+    // Benchmark the fund's returns against the S&P 500 (does it beat the market?).
+    // Prefer the true total-return index; fall back to SPY if it's unavailable.
+    let benchReturns = await fetchBenchmarkReturns('^SP500TR', perfAsOfMs).catch(() => null);
+    let benchSym = '^SP500TR';
+    if (!benchReturns) { benchReturns = await fetchBenchmarkReturns('SPY', perfAsOfMs).catch(() => null); benchSym = 'SPY'; }
+    out.benchmark = buildBenchmarkComparison(out.performance, benchReturns, 'S&P 500', benchSym);
+
     return out;
   } catch { return null; }
 }
@@ -1668,4 +1734,4 @@ server.listen(CONFIG.port, () => {
   `);
 });
 
-module.exports = { analyzeDCA, fetchYahooChartData, fetchAlphaVantageFundamentals, fetchFundFactsheet, scoreFundQuality, classifyFund, analyzeSectors };
+module.exports = { analyzeDCA, fetchYahooChartData, fetchAlphaVantageFundamentals, fetchFundFactsheet, scoreFundQuality, classifyFund, fetchBenchmarkReturns, buildBenchmarkComparison, analyzeSectors };
