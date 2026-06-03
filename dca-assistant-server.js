@@ -148,13 +148,13 @@ const SECTOR_PE_MEDIAN = {
 
 // ─── HTTP helper ────────────────────────────────────────────────────────────
 
-function makeRequest(urlString) {
+function makeRequest(urlString, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const urlObj = new url.URL(urlString);
     const req = https.get({
       hostname: urlObj.hostname, port: 443,
       path: urlObj.pathname + urlObj.search,
-      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json, */*', 'Accept-Language': 'en-US,en;q=0.9' },
+      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json, */*', 'Accept-Language': 'en-US,en;q=0.9', ...extraHeaders },
       maxHeaderSize: 32768
     }, (res) => {
       let data = '';
@@ -167,6 +167,54 @@ function makeRequest(urlString) {
     req.setTimeout(15000, () => req.destroy(new Error('Request timeout')));
     req.on('error', reject);
   });
+}
+
+// Yahoo's quoteSummary endpoint requires a crumb tied to a session cookie.
+// Cached for the process lifetime and refreshed periodically.
+let _yahooAuth = null;
+function rawGet(urlString, extraHeaders = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new url.URL(urlString);
+    const req = https.get({
+      hostname: urlObj.hostname, port: 443,
+      path: urlObj.pathname + urlObj.search,
+      headers: { 'User-Agent': USER_AGENT, 'Accept': '*/*', 'Accept-Language': 'en-US,en;q=0.9', ...extraHeaders },
+      maxHeaderSize: 32768
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: data }));
+    });
+    req.setTimeout(15000, () => req.destroy(new Error('Request timeout')));
+    req.on('error', reject);
+  });
+}
+
+async function getYahooCrumb() {
+  if (_yahooAuth && Date.now() - _yahooAuth.ts < 30 * 60 * 1000) return _yahooAuth;
+  // 1. Obtain a session cookie (fc.yahoo.com 404s but still sets the cookie)
+  const cookieRes = await rawGet('https://fc.yahoo.com/');
+  const cookie = (cookieRes.headers['set-cookie'] || []).map(c => c.split(';')[0]).join('; ');
+  if (!cookie) throw new Error('Could not obtain Yahoo session cookie');
+  // 2. Fetch a crumb bound to that cookie
+  const crumbRes = await rawGet('https://query1.finance.yahoo.com/v1/test/getcrumb', { Cookie: cookie });
+  const crumb = (crumbRes.body || '').trim();
+  if (!crumb || crumb.includes('<')) throw new Error('Could not obtain Yahoo crumb');
+  _yahooAuth = { cookie, crumb, ts: Date.now() };
+  return _yahooAuth;
+}
+
+// Authenticated quoteSummary call. Retries once with a fresh crumb on auth failure.
+async function fetchQuoteSummary(symbol, modules) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const auth = await getYahooCrumb();
+    const u = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}`
+            + `?modules=${modules}&crumb=${encodeURIComponent(auth.crumb)}`;
+    const data = await makeRequest(u, { Cookie: auth.cookie });
+    if (data.quoteSummary?.error?.code === 'Unauthorized') { _yahooAuth = null; continue; }
+    return data;
+  }
+  throw new Error('Yahoo quoteSummary unauthorized');
 }
 
 // ─── Technical indicators ────────────────────────────────────────────────────
@@ -519,9 +567,75 @@ async function fetchAlphaVantageFundamentals(symbol) {
 
 async function fetchEarningsDate(symbol) {
   try {
-    const data = await makeRequest(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=calendarEvents`);
+    const data = await fetchQuoteSummary(symbol, 'calendarEvents');
     const raw = data.quoteSummary?.result?.[0]?.calendarEvents?.earnings?.earningsDate?.[0]?.raw;
     return raw ? new Date(raw * 1000) : null;
+  } catch { return null; }
+}
+
+// Fund factsheet (ETFs / mutual funds only). Returns null for ordinary stocks,
+// which lets the UI auto-hide the tab.
+async function fetchFundFactsheet(symbol) {
+  try {
+    const modules = 'fundProfile,topHoldings,fundPerformance,defaultKeyStatistics,quoteType';
+    const data = await fetchQuoteSummary(symbol, modules);
+    const r = data.quoteSummary?.result?.[0];
+    if (!r) return null;
+
+    // Auto-detect: only ETFs/funds carry a fund profile or holdings list.
+    const isFund = !!(r.fundProfile || r.topHoldings?.holdings?.length || r.topHoldings?.sectorWeightings?.length);
+    if (!isFund) return null;
+
+    const num = v => (v && typeof v === 'object' && 'raw' in v) ? v.raw : (typeof v === 'number' ? v : null);
+    const pct = v => { const n = num(v); return n != null ? +(n * 100).toFixed(2) : null; };
+
+    const th = r.topHoldings || {};
+    const holdings = (th.holdings || []).slice(0, 10).map(h => ({
+      symbol: h.symbol || null,
+      name: h.holdingName || null,
+      pct: pct(h.holdingPercent)
+    }));
+
+    // sectorWeightings is an array of single-key objects, e.g. { technology: { raw } }
+    const sectors = (th.sectorWeightings || [])
+      .map(s => { const k = Object.keys(s)[0]; return k ? { sector: k, pct: pct(s[k]) } : null; })
+      .filter(s => s && s.pct);
+
+    const assetAllocation = {
+      stock: pct(th.stockPosition),
+      bond:  pct(th.bondPosition),
+      cash:  pct(th.cashPosition),
+      other: pct(th.otherPosition)
+    };
+
+    const tr = r.fundPerformance?.trailingReturns || {};
+    const performance = {
+      ytd:       pct(tr.ytd),
+      oneYear:   pct(tr.oneYear),
+      threeYear: pct(tr.threeYear),
+      fiveYear:  pct(tr.fiveYear),
+      tenYear:   pct(tr.tenYear)
+    };
+
+    const prof = r.fundProfile || {};
+    const ks = r.defaultKeyStatistics || {};
+    const inception = num(ks.fundInceptionDate);
+
+    return {
+      isFund: true,
+      type: r.quoteType?.quoteType || prof.legalType || null,
+      category: prof.categoryName || ks.category || null,
+      family: prof.family || null,
+      expenseRatio: pct(prof.feesExpensesInvestment?.annualReportExpenseRatio),
+      yield: pct(ks.yield),
+      beta3Year: num(ks.beta3Year) != null ? +num(ks.beta3Year).toFixed(2) : null,
+      totalAssets: num(ks.totalAssets),
+      inceptionDate: inception ? new Date(inception * 1000).toISOString().split('T')[0] : null,
+      holdings,
+      sectors,
+      assetAllocation,
+      performance
+    };
   } catch { return null; }
 }
 
@@ -635,13 +749,14 @@ async function analyzeDCA(symbol, options = {}) {
   const sectorEtf = SECTOR_ETF[symbol.toUpperCase()];
 
   // All external fetches run in parallel
-  const [stockResult, spyResult, vixResult, sectorResult, fundResult, earningsResult] = await Promise.allSettled([
+  const [stockResult, spyResult, vixResult, sectorResult, fundResult, earningsResult, factsheetResult] = await Promise.allSettled([
     fetchYahooChartData(symbol),
     fetchQuickChartData('SPY', '1y'),
     fetchQuickChartData('^VIX', '1y'),
     sectorEtf ? fetchQuickChartData(sectorEtf) : Promise.resolve(null),
     options.yahooOnly ? Promise.resolve(null) : fetchAlphaVantageFundamentals(symbol),
-    options.yahooOnly ? Promise.resolve(null) : fetchEarningsDate(symbol)
+    options.yahooOnly ? Promise.resolve(null) : fetchEarningsDate(symbol),
+    options.yahooOnly ? Promise.resolve(null) : fetchFundFactsheet(symbol)
   ]);
 
   if (stockResult.status !== 'fulfilled') {
@@ -665,6 +780,7 @@ async function analyzeDCA(symbol, options = {}) {
   const sectorData = sectorResult.status === 'fulfilled' ? sectorResult.value : null;
   const fundamentalData = fundResult.status === 'fulfilled' ? fundResult.value : null;
   const earningsDate = earningsResult?.status === 'fulfilled' ? earningsResult.value : null;
+  const factsheetData = factsheetResult?.status === 'fulfilled' ? factsheetResult.value : null;
 
   if (fundamentalData) console.log('✅ Fundamental data loaded');
   else errors.push(`Fundamentals: ${fundResult.reason?.message}`);
@@ -1081,6 +1197,7 @@ async function analyzeDCA(symbol, options = {}) {
       marketCap: d.marketCap,
       sector: d.sector
     } : null,
+    factsheet: factsheetData,
     chartData: d.chartData || null,
     errors: errors.length ? errors : null
   };
@@ -1345,4 +1462,4 @@ server.listen(CONFIG.port, () => {
   `);
 });
 
-module.exports = { analyzeDCA, fetchYahooChartData, fetchAlphaVantageFundamentals };
+module.exports = { analyzeDCA, fetchYahooChartData, fetchAlphaVantageFundamentals, fetchFundFactsheet };

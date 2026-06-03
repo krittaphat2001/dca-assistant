@@ -463,6 +463,19 @@
         .signal-table td { padding: 9px 12px; border-top: 1px solid #f0f0f0; }
         .signal-badge { display: inline-block; color: white; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
 
+        /* ── Factsheet ── */
+        .fs-section { margin: 22px 0; }
+        .fs-section-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .fs-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; font-size: 13px; }
+        .fs-bar-label { flex: 0 0 150px; color: #555; }
+        .fs-bar-track { flex: 1; height: 16px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+        .fs-bar-fill { height: 100%; background: linear-gradient(90deg,#667eea,#764ba2); border-radius: 4px; }
+        .fs-bar-val { flex: 0 0 54px; text-align: right; color: #333; font-weight: 600; }
+        .fs-perf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; }
+        .fs-perf-card { text-align: center; padding: 12px 8px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; }
+        .fs-perf-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.3px; }
+        .fs-perf-val { font-size: 18px; font-weight: 700; margin-top: 4px; }
+
         .chart-section { margin-bottom: 24px; }
         .chart-title { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
         .chart-wrapper { position: relative; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; padding: 12px; }
@@ -866,6 +879,7 @@
                         <button class="tab-button" onclick="switchTab('chart')">Chart</button>
                         <button class="tab-button" onclick="switchTab('technical')">Technical</button>
                         <button class="tab-button" onclick="switchTab('fundamental')">Fundamental</button>
+                        <button class="tab-button" id="factsheetTabBtn" style="display:none" onclick="switchTab('factsheet')">📋 Factsheet</button>
                         <button class="tab-button" onclick="switchTab('market')">Market</button>
                     </div>
 
@@ -914,6 +928,12 @@
                     <!-- Fundamental Tab -->
                     <div id="fundamental" class="tab-content">
                         <div class="metrics-grid" id="fundamentalMetrics"></div>
+                    </div>
+
+                    <!-- Factsheet Tab (ETFs / funds only) -->
+                    <div id="factsheet" class="tab-content">
+                        <div class="metrics-grid" id="factsheetMetrics"></div>
+                        <div id="factsheetExtra"></div>
                     </div>
 
                     <!-- Market Tab -->
@@ -1441,6 +1461,9 @@
                 ]);
             }
 
+            // ── Factsheet (ETFs / funds only — auto-hide otherwise) ──
+            renderFactsheet(data.factsheet);
+
             // ── Market metrics ──
             displayMetrics('market', [
                 { label: 'Current Price',    value: `$${data.market.currentPrice}` },
@@ -1465,6 +1488,104 @@
                     ${m.subtext ? `<div class="metric-subtext">${m.subtext}</div>` : ''}
                 </div>
             `).join('');
+        }
+
+        const SECTOR_LABELS = {
+            realestate: 'Real Estate', consumer_cyclical: 'Consumer Cyclical',
+            basic_materials: 'Basic Materials', consumer_defensive: 'Consumer Defensive',
+            technology: 'Technology', communication_services: 'Communication Svcs',
+            financial_services: 'Financial Services', utilities: 'Utilities',
+            industrials: 'Industrials', energy: 'Energy', healthcare: 'Healthcare'
+        };
+        const prettySector = k => SECTOR_LABELS[k] || k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const fmtPct = v => v == null ? 'N/A' : `${v}%`;
+        const fmtAUM = v => v == null ? 'N/A'
+            : v >= 1e12 ? `$${(v/1e12).toFixed(2)}T`
+            : v >= 1e9  ? `$${(v/1e9).toFixed(1)}B`
+            : v >= 1e6  ? `$${(v/1e6).toFixed(0)}M` : `$${v}`;
+
+        function renderFactsheet(fs) {
+            const btn = document.getElementById('factsheetTabBtn');
+            // Auto-hide the tab for non-funds (plain stocks return no factsheet)
+            if (!fs || !fs.isFund) {
+                btn.style.display = 'none';
+                // If the hidden tab was active, fall back to Overview
+                if (document.getElementById('factsheet').classList.contains('active')) {
+                    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                    document.querySelector('.tab-button').classList.add('active');
+                    document.getElementById('overview').classList.add('active');
+                }
+                return;
+            }
+            btn.style.display = '';
+
+            // ── Summary stat cards ──
+            displayMetrics('factsheet', [
+                { label: 'Type',          value: fs.type || 'Fund' },
+                { label: 'Category',      value: fs.category || 'N/A' },
+                { label: 'Fund Family',   value: fs.family || 'N/A' },
+                { label: 'Expense Ratio', value: fmtPct(fs.expenseRatio), subtext: fs.expenseRatio == null ? '' : (fs.expenseRatio <= 0.1 ? 'Very low ✅' : fs.expenseRatio <= 0.5 ? 'Reasonable ⚖️' : 'High ⚠️') },
+                { label: 'Yield',         value: fmtPct(fs.yield), subtext: 'Annual distribution' },
+                { label: 'AUM',           value: fmtAUM(fs.totalAssets), subtext: 'Assets under management' },
+                { label: '3Y Beta',       value: fs.beta3Year != null ? fs.beta3Year : 'N/A', subtext: fs.beta3Year == null ? '' : (fs.beta3Year > 1 ? 'More volatile than market' : 'Less volatile than market') },
+                { label: 'Inception',     value: fs.inceptionDate || 'N/A' }
+            ]);
+
+            let html = '';
+
+            // ── Trailing performance ──
+            const p = fs.performance || {};
+            const perfCells = [
+                ['YTD', p.ytd], ['1 Year', p.oneYear], ['3 Year', p.threeYear],
+                ['5 Year', p.fiveYear], ['10 Year', p.tenYear]
+            ].filter(([, v]) => v != null);
+            if (perfCells.length) {
+                html += `<div class="fs-section"><div class="fs-section-title">Trailing Returns (annualized)</div>
+                    <div class="fs-perf-grid">${perfCells.map(([label, v]) => `
+                        <div class="fs-perf-card">
+                            <div class="fs-perf-label">${label}</div>
+                            <div class="fs-perf-val" style="color:${v >= 0 ? '#2e7d32' : '#c62828'}">${v >= 0 ? '+' : ''}${v}%</div>
+                        </div>`).join('')}</div></div>`;
+            }
+
+            // ── Asset allocation ──
+            const aa = fs.assetAllocation || {};
+            const aaRows = [['Stocks', aa.stock], ['Bonds', aa.bond], ['Cash', aa.cash], ['Other', aa.other]]
+                .filter(([, v]) => v != null && v > 0);
+            if (aaRows.length) {
+                html += `<div class="fs-section"><div class="fs-section-title">Asset Allocation</div>
+                    ${aaRows.map(([label, v]) => bar(label, v)).join('')}</div>`;
+            }
+
+            // ── Sector weightings ──
+            if (fs.sectors && fs.sectors.length) {
+                const sorted = [...fs.sectors].sort((a, b) => b.pct - a.pct);
+                html += `<div class="fs-section"><div class="fs-section-title">Sector Weightings</div>
+                    ${sorted.map(s => bar(prettySector(s.sector), s.pct)).join('')}</div>`;
+            }
+
+            // ── Top holdings ──
+            if (fs.holdings && fs.holdings.length) {
+                html += `<div class="fs-section"><div class="fs-section-title">Top 10 Holdings</div>
+                    <table class="signal-table"><thead><tr><th>#</th><th>Symbol</th><th>Name</th><th style="text-align:right">Weight</th></tr></thead><tbody>
+                    ${fs.holdings.map((h, i) => `<tr>
+                        <td>${i + 1}</td>
+                        <td><strong>${h.symbol || '—'}</strong></td>
+                        <td>${h.name || '—'}</td>
+                        <td style="text-align:right">${h.pct != null ? h.pct + '%' : '—'}</td>
+                    </tr>`).join('')}</tbody></table></div>`;
+            }
+
+            document.getElementById('factsheetExtra').innerHTML = html;
+
+            function bar(label, pct) {
+                return `<div class="fs-bar-row">
+                    <div class="fs-bar-label">${label}</div>
+                    <div class="fs-bar-track"><div class="fs-bar-fill" style="width:${Math.min(100, pct)}%"></div></div>
+                    <div class="fs-bar-val">${pct}%</div>
+                </div>`;
+            }
         }
 
         document.getElementById('ticker').addEventListener('keypress', e => {
