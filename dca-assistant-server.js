@@ -573,6 +573,96 @@ async function fetchEarningsDate(symbol) {
   } catch { return null; }
 }
 
+// Fund-quality score (0–100) derived from factsheet data. Standalone — does NOT
+// feed the DCA score. Encodes the four pillars: cost, track record,
+// diversification, and risk/size. Pure function so thresholds are easy to tune.
+function scoreFundQuality(fs) {
+  const comps = [];
+
+  // ── 1. Expense ratio (30) — the single biggest long-run predictor; lower is better
+  const er = fs.expenseRatio;
+  let erScore, erDetail;
+  if (er == null)      { erScore = 15; erDetail = 'Expense ratio not reported'; }
+  else if (er <= 0.05) { erScore = 30; erDetail = `${er}% — rock-bottom cost`; }
+  else if (er <= 0.10) { erScore = 27; erDetail = `${er}% — very low cost`; }
+  else if (er <= 0.20) { erScore = 23; erDetail = `${er}% — low cost`; }
+  else if (er <= 0.50) { erScore = 15; erDetail = `${er}% — moderate cost`; }
+  else if (er <= 1.00) { erScore = 7;  erDetail = `${er}% — high cost`; }
+  else                 { erScore = 0;  erDetail = `${er}% — very high cost`; }
+  comps.push({ label: 'Expense Ratio', score: erScore, max: 30, detail: erDetail });
+
+  // ── 2. Track record (30) = longevity (15) + long-term annualized return (15)
+  let years = null;
+  if (fs.inceptionDate) years = (Date.now() - new Date(fs.inceptionDate).getTime()) / (365.25 * 864e5);
+  let longevity, longNote;
+  if (years == null)    { longevity = 7;  longNote = 'inception unknown'; }
+  else if (years >= 15) { longevity = 15; longNote = `${years.toFixed(0)}y history`; }
+  else if (years >= 10) { longevity = 12; longNote = `${years.toFixed(0)}y history`; }
+  else if (years >= 5)  { longevity = 9;  longNote = `${years.toFixed(0)}y history`; }
+  else if (years >= 3)  { longevity = 5;  longNote = `${years.toFixed(0)}y — limited`; }
+  else                  { longevity = 2;  longNote = `${years.toFixed(1)}y — unproven`; }
+
+  const ltRet = fs.performance?.tenYear ?? fs.performance?.fiveYear ?? null;
+  const ltLbl = fs.performance?.tenYear != null ? '10Y' : '5Y';
+  let retScore, retNote;
+  if (ltRet == null)    { retScore = 7;  retNote = 'no long-term return'; }
+  else if (ltRet >= 12) { retScore = 15; retNote = `${ltLbl} ${ltRet}%/yr — strong`; }
+  else if (ltRet >= 8)  { retScore = 12; retNote = `${ltLbl} ${ltRet}%/yr — solid`; }
+  else if (ltRet >= 5)  { retScore = 8;  retNote = `${ltLbl} ${ltRet}%/yr — modest`; }
+  else if (ltRet >= 0)  { retScore = 4;  retNote = `${ltLbl} ${ltRet}%/yr — weak`; }
+  else                  { retScore = 0;  retNote = `${ltLbl} ${ltRet}%/yr — negative`; }
+  comps.push({ label: 'Track Record', score: longevity + retScore, max: 30, detail: `${longNote}; ${retNote}` });
+
+  // ── 3. Diversification (20) = top-10 concentration (12) + sector spread (8)
+  const top10 = (fs.holdings || []).reduce((s, h) => s + (h.pct || 0), 0);
+  let concScore, concNote;
+  if (!fs.holdings?.length) { concScore = 6; concNote = 'holdings n/a'; }
+  else if (top10 < 25) { concScore = 12; concNote = `top-10 ${top10.toFixed(0)}% — broad`; }
+  else if (top10 < 40) { concScore = 9;  concNote = `top-10 ${top10.toFixed(0)}% — diversified`; }
+  else if (top10 < 55) { concScore = 6;  concNote = `top-10 ${top10.toFixed(0)}% — concentrated`; }
+  else if (top10 < 70) { concScore = 3;  concNote = `top-10 ${top10.toFixed(0)}% — very concentrated`; }
+  else                 { concScore = 1;  concNote = `top-10 ${top10.toFixed(0)}% — top-heavy`; }
+
+  const sectorCount = (fs.sectors || []).filter(s => s.pct >= 1).length;
+  let secScore;
+  if (!fs.sectors?.length)   secScore = 4;
+  else if (sectorCount >= 9) secScore = 8;
+  else if (sectorCount >= 6) secScore = 6;
+  else if (sectorCount >= 4) secScore = 3;
+  else                       secScore = 1;
+  comps.push({ label: 'Diversification', score: concScore + secScore, max: 20, detail: `${concNote}; ${sectorCount || '—'} sectors ≥1%` });
+
+  // ── 4. Risk & size (20) = 3Y beta (10) + AUM (10)
+  const beta = fs.beta3Year;
+  let betaScore, betaNote;
+  if (beta == null)      { betaScore = 6;  betaNote = 'beta n/a'; }
+  else if (beta <= 1.0)  { betaScore = 10; betaNote = `β ${beta} — market/defensive`; }
+  else if (beta <= 1.15) { betaScore = 8;  betaNote = `β ${beta} — near market`; }
+  else if (beta <= 1.3)  { betaScore = 5;  betaNote = `β ${beta} — elevated`; }
+  else if (beta <= 1.6)  { betaScore = 2;  betaNote = `β ${beta} — high`; }
+  else                   { betaScore = 0;  betaNote = `β ${beta} — very high`; }
+
+  const aum = fs.totalAssets;
+  let aumScore, aumNote;
+  if (aum == null)       { aumScore = 5;  aumNote = 'AUM n/a'; }
+  else if (aum >= 1e10)  { aumScore = 10; aumNote = 'AUM ≥$10B — established'; }
+  else if (aum >= 1e9)   { aumScore = 8;  aumNote = 'AUM ≥$1B — solid'; }
+  else if (aum >= 2.5e8) { aumScore = 6;  aumNote = 'AUM ≥$250M'; }
+  else if (aum >= 5e7)   { aumScore = 3;  aumNote = 'AUM <$250M — small'; }
+  else                   { aumScore = 1;  aumNote = 'AUM <$50M — closure risk'; }
+  comps.push({ label: 'Risk & Size', score: betaScore + aumScore, max: 20, detail: `${betaNote}; ${aumNote}` });
+
+  const total = comps.reduce((s, c) => s + c.score, 0);
+  const grade   = total >= 85 ? 'A' : total >= 70 ? 'B' : total >= 55 ? 'C' : total >= 40 ? 'D' : 'F';
+  const verdict = total >= 85 ? 'Excellent core holding'
+                : total >= 70 ? 'Solid, well-built fund'
+                : total >= 55 ? 'Decent — mind the trade-offs'
+                : total >= 40 ? 'Mediocre — proceed with care'
+                : 'Weak on the fundamentals';
+
+  return { score: total, grade, verdict, components: comps };
+}
+
 // Fund factsheet (ETFs / mutual funds only). Returns null for ordinary stocks,
 // which lets the UI auto-hide the tab.
 async function fetchFundFactsheet(symbol) {
@@ -621,7 +711,7 @@ async function fetchFundFactsheet(symbol) {
     const ks = r.defaultKeyStatistics || {};
     const inception = num(ks.fundInceptionDate);
 
-    return {
+    const out = {
       isFund: true,
       type: r.quoteType?.quoteType || prof.legalType || null,
       category: prof.categoryName || ks.category || null,
@@ -636,6 +726,8 @@ async function fetchFundFactsheet(symbol) {
       assetAllocation,
       performance
     };
+    out.fundQuality = scoreFundQuality(out);
+    return out;
   } catch { return null; }
 }
 
@@ -1462,4 +1554,4 @@ server.listen(CONFIG.port, () => {
   `);
 });
 
-module.exports = { analyzeDCA, fetchYahooChartData, fetchAlphaVantageFundamentals, fetchFundFactsheet };
+module.exports = { analyzeDCA, fetchYahooChartData, fetchAlphaVantageFundamentals, fetchFundFactsheet, scoreFundQuality };

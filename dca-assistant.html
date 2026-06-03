@@ -476,6 +476,20 @@
         .fs-perf-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.3px; }
         .fs-perf-val { font-size: 18px; font-weight: 700; margin-top: 4px; }
 
+        /* ── Fund quality score ── */
+        .fq-banner { display: flex; align-items: center; gap: 18px; padding: 18px 22px; border-radius: 12px; margin: 6px 0 20px; border: 1px solid #eee; }
+        .fq-grade { flex: 0 0 auto; width: 66px; height: 66px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 800; color: #fff; }
+        .fq-meta { flex: 1; }
+        .fq-score-line { font-size: 22px; font-weight: 700; color: #222; }
+        .fq-score-line small { font-size: 14px; color: #888; font-weight: 600; }
+        .fq-verdict { font-size: 14px; color: #555; margin-top: 2px; }
+        .fq-comp { margin-top: 10px; }
+        .fq-comp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; font-size: 13px; }
+        .fq-comp-label { flex: 0 0 130px; font-weight: 600; color: #333; }
+        .fq-comp-track { flex: 0 0 120px; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+        .fq-comp-fill { height: 100%; border-radius: 4px; }
+        .fq-comp-detail { flex: 1; color: #666; }
+
         .chart-section { margin-bottom: 24px; }
         .chart-title { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
         .chart-wrapper { position: relative; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; padding: 12px; }
@@ -932,6 +946,7 @@
 
                     <!-- Factsheet Tab (ETFs / funds only) -->
                     <div id="factsheet" class="tab-content">
+                        <div id="factsheetScore"></div>
                         <div class="metrics-grid" id="factsheetMetrics"></div>
                         <div id="factsheetExtra"></div>
                     </div>
@@ -1520,6 +1535,9 @@
             }
             btn.style.display = '';
 
+            // ── Fund quality score (headline) ──
+            renderFundQuality(fs.fundQuality);
+
             // ── Summary stat cards ──
             displayMetrics('factsheet', [
                 { label: 'Type',          value: fs.type || 'Fund' },
@@ -1586,6 +1604,32 @@
                     <div class="fs-bar-val">${pct}%</div>
                 </div>`;
             }
+        }
+
+        const GRADE_COLORS = { A: '#2e7d32', B: '#66a000', C: '#e0a800', D: '#e8730a', F: '#c62828' };
+
+        function renderFundQuality(fq) {
+            const el = document.getElementById('factsheetScore');
+            if (!fq) { el.innerHTML = ''; return; }
+            const color = GRADE_COLORS[fq.grade] || '#667eea';
+            const rows = fq.components.map(c => {
+                const pct = Math.round(c.score / c.max * 100);
+                const fill = pct >= 80 ? '#2e7d32' : pct >= 60 ? '#66a000' : pct >= 40 ? '#e0a800' : '#c62828';
+                return `<div class="fq-comp-row">
+                    <div class="fq-comp-label">${c.label}</div>
+                    <div class="fq-comp-track"><div class="fq-comp-fill" style="width:${pct}%;background:${fill}"></div></div>
+                    <div class="fq-comp-detail"><strong>${c.score}/${c.max}</strong> &middot; ${c.detail}</div>
+                </div>`;
+            }).join('');
+            el.innerHTML = `
+                <div class="fq-banner" style="background:${color}0d">
+                    <div class="fq-grade" style="background:${color}">${fq.grade}</div>
+                    <div class="fq-meta">
+                        <div class="fq-score-line">Fund Quality ${fq.score}<small>/100</small></div>
+                        <div class="fq-verdict">${fq.verdict}</div>
+                        <div class="fq-comp">${rows}</div>
+                    </div>
+                </div>`;
         }
 
         document.getElementById('ticker').addEventListener('keypress', e => {
