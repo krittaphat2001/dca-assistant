@@ -694,6 +694,23 @@
         .port-review-list li { font-size: 13px; line-height: 1.55; color: #444; padding: 5px 0 5px 24px; position: relative; }
         .port-review-list.port-crit li:before { content: '⚠️'; position: absolute; left: 0; }
         .port-review-list.port-sugg li:before { content: '💡'; position: absolute; left: 0; }
+        .port-review-list.port-moves li:before { content: '➡️'; position: absolute; left: 0; }
+
+        /* ── Market & Sectors ── */
+        .port-market-wrap { padding: 16px 30px 4px; }
+        .port-market-card { border: 1px solid #e3e6ec; border-radius: 10px; padding: 16px 18px; background: #fff; }
+        .port-market-regime { font-size: 13px; color: #555; margin-bottom: 12px; }
+        .port-market-regime b { color: #333; }
+        .port-market-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 760px) { .port-market-cols { grid-template-columns: 1fr; gap: 14px; } }
+        .port-market-col-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 9px; }
+        .port-sector-chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 600; margin: 0 6px 7px 0; border: 1px solid; }
+        .port-sector-chip .rs { font-weight: 800; }
+        .port-sector-chip .ex { font-weight: 400; opacity: 0.6; font-size: 11px; }
+        .port-market-loading { color: #999; font-size: 13px; padding: 10px 0; }
+        .port-suggest-btn { padding: 10px 18px; white-space: nowrap; background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; transition: opacity 0.2s; }
+        .port-suggest-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .port-suggest-btn:not(:disabled):hover { opacity: 0.9; }
 
         /* ── Scan Watchlist ── */
         .sidebar-footer {
@@ -1052,6 +1069,7 @@
                         <div class="port-stat-label">Last Updated</div>
                         <div style="font-size:13px;color:#888" id="portLastUpdated">Not refreshed yet</div>
                     </div>
+                    <button id="portSuggestBtn" onclick="suggestNextMove()" class="port-suggest-btn">💡 Suggest</button>
                     <button id="portRefreshBtn" onclick="refreshPortfolio()" style="padding:10px 20px;white-space:nowrap">🔄 Refresh All</button>
                 </div>
 
@@ -1059,6 +1077,19 @@
                 <div class="port-insight-box" id="portInsightBox" style="display:none">
                     <div class="port-insight-title">💡 This Week's DCA Priority</div>
                     <div id="portInsightContent"></div>
+                </div>
+
+                <!-- Market & Sectors: rotation snapshot + personalized next moves -->
+                <div class="port-market-wrap" id="portMarketWrap" style="display:none">
+                    <div class="port-alloc-title port-review-header" id="portMarketHeader" onclick="toggleMarket()" title="Click to collapse / expand">
+                        <span>🧭 Market &amp; Sectors <span class="port-review-subtitle">— where the market is bullish now, what to do, and what to be wary of.</span></span>
+                        <span class="port-review-chevron" id="portMarketChevron">▾</span>
+                    </div>
+                    <div class="port-market-card" id="portMarketCard">
+                        <div id="portMarketBody">
+                            <div class="port-market-loading">Hit 💡 Suggest (top-right) to load the current sector picture and your next moves.</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Allocation Overview: 3 sleeves -->
@@ -2044,7 +2075,7 @@
             document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById(pageId).classList.add('active');
-            if (pageId === 'portfolioPage') renderPortfolio();
+            if (pageId === 'portfolioPage') { renderPortfolio(); loadSectors(false); }
         }
 
         // ── Portfolio state ────────────────────────────────────────
@@ -2425,6 +2456,134 @@
             document.getElementById('portReviewSugg').innerHTML = r.suggestions.map(s => `<li>${s}</li>`).join('');
         }
 
+        // ── Market & Sectors: rotation snapshot + next moves ─────────
+        let sectorData = null;
+        let sectorsLoading = false;
+        let marketCollapsed = false;
+        try { marketCollapsed = localStorage.getItem('portMarketCollapsed') === '1'; } catch {}
+        function applyMarketCollapsed() {
+            const card = document.getElementById('portMarketCard');
+            const hdr = document.getElementById('portMarketHeader');
+            if (!card || !hdr) return;
+            card.style.display = marketCollapsed ? 'none' : '';
+            hdr.classList.toggle('collapsed', marketCollapsed);
+        }
+        function toggleMarket() {
+            marketCollapsed = !marketCollapsed;
+            try { localStorage.setItem('portMarketCollapsed', marketCollapsed ? '1' : '0'); } catch {}
+            applyMarketCollapsed();
+        }
+
+        async function loadSectors(force) {
+            if (sectorsLoading) return;
+            if (sectorData && !force) { renderSectors(); return; }
+            sectorsLoading = true;
+            document.getElementById('portMarketWrap').style.display = '';
+            const body = document.getElementById('portMarketBody');
+            body.innerHTML = '<div class="port-market-loading">Loading current sector data…</div>';
+            try {
+                const r = await fetch(`${apiBase()}/api/sectors`);
+                if (r.ok) sectorData = await r.json();
+                else body.innerHTML = '<div class="port-market-loading">Could not load sector data (server returned ' + r.status + ').</div>';
+            } catch {
+                body.innerHTML = '<div class="port-market-loading">Could not reach the server for sector data. Make sure it\'s running and restarted to pick up the /api/sectors endpoint.</div>';
+            }
+            sectorsLoading = false;
+            if (sectorData) renderSectors();
+        }
+
+        async function suggestNextMove() {
+            const btn = document.getElementById('portSuggestBtn');
+            marketCollapsed = false; applyMarketCollapsed();
+            document.getElementById('portMarketWrap').style.display = '';
+            btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Thinking…';
+            await loadSectors(true);
+            btn.disabled = false; btn.textContent = orig;
+            document.getElementById('portMarketWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function sectorChipStyle(status) {
+            switch (status) {
+                case 'Leading': return { bg: '#e7f6ea', border: '#a5d6b0', color: '#1e7e34' };
+                case 'Bullish': return { bg: '#eef7ec', border: '#c3e0bd', color: '#3a8a3f' };
+                case 'Caution': return { bg: '#fff4e5', border: '#ffd699', color: '#c47f17' };
+                case 'Lagging': return { bg: '#fdecea', border: '#f5b7b1', color: '#c0392b' };
+                default:        return { bg: '#f1f3f5', border: '#dde1e6', color: '#666' };
+            }
+        }
+
+        // Personalized actions = sector timing (esp. power & materials) + tech-concentration + review gaps
+        function buildNextMoves() {
+            const moves = [];
+            const sd = sectorData;
+            const review = computePortfolioReview();
+            const getSec = etf => sd ? sd.sectors.find(x => x.etf === etf) : null;
+            const tickerStr = arr => (arr || []).slice(0, 3).join(', ');
+            const timing = (sec, label) => {
+                if (!sec) return null;
+                const sign = sec.relStrength >= 0 ? '+' : '';
+                if (sec.status === 'Leading' || sec.status === 'Bullish')
+                    return `<strong>${label}</strong> are trending up now — ${sec.etf} is above its 50-day and ${sign}${sec.relStrength}% vs SPY. A reasonable time to start the position you've wanted. Ideas: <strong>${sec.etf}</strong> (broad) or ${tickerStr(sec.examples)}. Scale in over a few weeks.`;
+                if (sec.aboveMA50)
+                    return `<strong>${label}</strong> are holding up but trailing the market (${sec.etf} above its 50-day, ${sign}${sec.relStrength}% vs SPY, 20d ${sec.ret20}%). Fine to open a starter position and DCA — just no strong tailwind yet. Ideas: <strong>${sec.etf}</strong>, ${tickerStr(sec.examples)}.`;
+                return `<strong>${label}</strong> are out of favor (${sec.etf} below its 50-day, ${sign}${sec.relStrength}% vs SPY, 20d ${sec.ret20}%). For a long-term tilt you can buy this weakness, but momentum is against it — start small and DCA. Ideas: <strong>${sec.etf}</strong>, ${tickerStr(sec.examples)}.`;
+            };
+
+            // Your stated interests first
+            const mU = timing(getSec('XLU'), 'Utilities / power'); if (mU) moves.push(mU);
+            const mB = timing(getSec('XLB'), 'Materials');         if (mB) moves.push(mB);
+
+            // Strongest leader outside tech/comm and the two above — a diversification idea
+            if (sd) {
+                const leaders = sd.sectors.filter(x => (x.status === 'Leading' || x.status === 'Bullish') && !['XLK', 'XLC', 'XLU', 'XLB'].includes(x.etf));
+                if (leaders.length) { const L = leaders[0]; const sign = L.relStrength >= 0 ? '+' : ''; moves.push(`Beyond those, <strong>${L.name}</strong> is the strongest area right now (${sign}${L.relStrength}% vs SPY) — another way to diversify out of mega-cap tech. e.g. ${tickerStr(L.examples)}.`); }
+            }
+
+            // Tech-concentration awareness (you hold index funds + several mega-caps)
+            const syms = portfolio.positions.map(p => p.symbol);
+            const techHeavy = syms.filter(s => BROAD_INDEX.has(s)).length >= 1 && syms.filter(s => MEGA_CAP.has(s)).length >= 2;
+            const xlk = getSec('XLK'), xlc = getSec('XLC');
+            const techWeak = (xlk && (xlk.status === 'Caution' || xlk.status === 'Lagging')) || (xlc && (xlc.status === 'Caution' || xlc.status === 'Lagging'));
+            const techStrong = xlk && (xlk.status === 'Leading' || xlk.status === 'Bullish');
+            if (techHeavy && techWeak) moves.push(`Your book leans heavily on tech/communication (index funds + several mega-caps) and that group is cooling now — avoid adding there; point new money at the areas above.`);
+            else if (techHeavy && techStrong) moves.push(`Your tech-heavy book is riding the trend, but that concentration is the real risk — send new contributions to other sectors rather than topping up the winners.`);
+
+            // Gaps surfaced by the portfolio review
+            if (review) {
+                if (review.criticisms.some(c => /Safe Haven|crash hedge|dry powder/i.test(c))) moves.push(`Build a genuine crash hedge for dry powder: <strong>SGOV/BIL</strong> (T-bills), <strong>TLT</strong> (Treasuries), or <strong>GLD</strong> (gold).`);
+                if (review.criticisms.some(c => /overbought|52-week high/i.test(c))) moves.push(`Much of your book is extended — favour DCA tranches over lump sums; the per-holding "This Week %" already paces this.`);
+            }
+
+            if (!sd) moves.unshift(`Click "refresh sectors" to load the live sector picture.`);
+            if (!moves.length) moves.push(`No pressing moves — keep DCAing to plan and revisit when allocations drift.`);
+            return moves;
+        }
+
+        function renderSectors() {
+            if (!sectorData) return;
+            const s = sectorData;
+            document.getElementById('portMarketWrap').style.display = '';
+            applyMarketCollapsed();
+            const bullish = s.sectors.filter(x => x.status === 'Leading' || x.status === 'Bullish');
+            const aware   = s.sectors.filter(x => x.status === 'Caution' || x.status === 'Lagging');
+            const chip = x => {
+                const st = sectorChipStyle(x.status);
+                const sign = x.relStrength >= 0 ? '+' : '';
+                return `<span class="port-sector-chip" style="background:${st.bg};border-color:${st.border};color:${st.color}" title="${x.status} · ${x.aboveMA50 ? 'above' : 'below'} 50-day, ${x.aboveMA200 ? 'above' : 'below'} 200-day · 20d ${x.ret20}%">${x.name} <span class="rs">${sign}${x.relStrength}%</span> <span class="ex">${(x.examples || []).slice(0, 3).join(' ')}</span></span>`;
+            };
+            const moves = buildNextMoves();
+            document.getElementById('portMarketBody').innerHTML = `
+                <div class="port-market-regime">Market regime: <b>${s.spyRegime}</b>${s.spyPrice ? ` · SPY $${s.spyPrice}` : ''} <span style="color:#aaa">· % = 20/60-day strength vs SPY</span></div>
+                <div class="port-market-cols">
+                    <div><div class="port-market-col-title" style="color:#1e8e3e">🔥 Wind at their back</div>${bullish.length ? bullish.map(chip).join('') : '<span style="color:#999;font-size:12px">No clearly leading sectors right now.</span>'}</div>
+                    <div><div class="port-market-col-title" style="color:#c0392b">⚠️ Be aware / lagging</div>${aware.length ? aware.map(chip).join('') : '<span style="color:#999;font-size:12px">Nothing notably weak.</span>'}</div>
+                </div>
+                <hr class="port-detail-section-sep" style="margin:14px 0">
+                <div class="port-market-col-title" style="color:#2a6cf0">💡 Your next moves</div>
+                <ul class="port-review-list port-moves">${moves.map(m => `<li>${m}</li>`).join('')}</ul>
+                <div style="font-size:11px;color:#aaa;margin-top:10px">As of ${new Date(s.asOf).toLocaleString()} · <a href="#" onclick="event.preventDefault();loadSectors(true)" style="color:#888">refresh sectors</a></div>`;
+        }
+
         // ── Helpers ─────────────────────────────────────────────────
         function portAllocColor(pct) {
             if (pct >= 75) return '#4caf50';
@@ -2525,6 +2684,7 @@
             });
             renderAllocation(sleeveAgg, totalValue, budget, fmt, fmt0);
             renderReview();
+            if (sectorData) renderSectors();
 
             // ── Table ──
             const tbody = document.getElementById('portTableBody');

@@ -146,6 +146,24 @@ const SECTOR_PE_MEDIAN = {
   XLP: 20, XLE: 12, XLI: 20, XLB: 18, XLRE: 35, XLU: 18
 };
 
+// Human-readable sector names for the 11 SPDR sector ETFs
+const SECTOR_NAMES = {
+  XLK: 'Technology', XLC: 'Communication Services', XLF: 'Financials',
+  XLV: 'Health Care', XLY: 'Consumer Discretionary', XLP: 'Consumer Staples',
+  XLE: 'Energy', XLI: 'Industrials', XLU: 'Utilities (Power)',
+  XLRE: 'Real Estate', XLB: 'Materials'
+};
+
+// A few liquid, well-known names per sector — surfaced as starting ideas
+const SECTOR_EXAMPLES = {
+  XLK: ['MSFT', 'NVDA', 'AVGO'], XLC: ['GOOGL', 'META', 'NFLX'],
+  XLF: ['JPM', 'V', 'MA'],       XLV: ['LLY', 'UNH', 'JNJ'],
+  XLY: ['AMZN', 'HD', 'MCD'],    XLP: ['WMT', 'PG', 'COST'],
+  XLE: ['XOM', 'CVX', 'COP'],    XLI: ['GE', 'CAT', 'HON'],
+  XLU: ['CEG', 'NEE', 'SO'],     XLRE: ['PLD', 'AMT', 'O'],
+  XLB: ['LIN', 'SHW', 'FCX']
+};
+
 // ─── HTTP helper ────────────────────────────────────────────────────────────
 
 function makeRequest(urlString, extraHeaders = {}) {
@@ -1399,6 +1417,63 @@ async function scanWatchlist(symbols, sseWrite, isCancelled) {
   sseWrite({ type: 'done' });
 }
 
+// ─── Sector rotation snapshot ──────────────────────────────────────────────────
+
+// Fetches SPY + the 11 sector ETFs and ranks each sector by trend (vs its 50/200-day
+// MAs) and relative strength vs SPY, so the UI can show what's leading vs lagging now.
+async function analyzeSectors() {
+  const etfs = Object.keys(SECTOR_NAMES);
+  const settled = await Promise.allSettled([
+    fetchQuickChartData('SPY', '1y'),
+    ...etfs.map(e => fetchQuickChartData(e, '1y'))
+  ]);
+  const spy = settled[0].status === 'fulfilled' ? settled[0].value : null;
+  const spyRet20 = spy?.ret20 ?? 0;
+  const spyRet60 = spy?.ret60 ?? 0;
+  const spyRegime = !spy ? 'Unknown'
+    : spy.currentPrice > spy.ma50
+      ? (spy.currentPrice > spy.ma200 ? 'Bull market' : 'Recovering')
+      : (spy.currentPrice > spy.ma200 ? 'Choppy / pullback' : 'Bear market');
+
+  const sectors = [];
+  for (let i = 0; i < etfs.length; i++) {
+    const r = settled[i + 1];
+    if (r.status !== 'fulfilled' || !r.value) continue;
+    const d = r.value;
+    const aboveMA50 = d.currentPrice > d.ma50;
+    const aboveMA200 = d.currentPrice > d.ma200;
+    const rs20 = (d.ret20 - spyRet20) * 100;                       // pts vs SPY, 20d
+    const rs60 = ((d.ret60 ?? d.ret20) - spyRet60) * 100;          // pts vs SPY, 60d
+    const rs = +((rs20 + rs60) / 2).toFixed(1);
+
+    let score = 0;
+    score += aboveMA50 ? 2 : 0;
+    score += aboveMA200 ? 2 : 0;
+    score += d.ret20 > 0 ? 1 : 0;
+    score += (d.ret60 ?? 0) > 0 ? 1 : 0;
+    score += rs > 1 ? 2 : rs > -1 ? 1 : 0;
+
+    let status;
+    if (aboveMA50 && aboveMA200 && rs > 1) status = 'Leading';
+    else if (aboveMA50 && rs > -1)         status = 'Bullish';
+    else if (!aboveMA50 && !aboveMA200 && rs < -1) status = 'Lagging';
+    else if (!aboveMA200)                  status = 'Caution';
+    else                                   status = 'Neutral';
+
+    sectors.push({
+      etf: etfs[i], name: SECTOR_NAMES[etfs[i]],
+      price: +d.currentPrice.toFixed(2),
+      aboveMA50, aboveMA200,
+      ret20: +(d.ret20 * 100).toFixed(1),
+      ret60: +((d.ret60 ?? d.ret20) * 100).toFixed(1),
+      relStrength: rs, score, status,
+      examples: SECTOR_EXAMPLES[etfs[i]] || []
+    });
+  }
+  sectors.sort((a, b) => b.score - a.score || b.relStrength - a.relStrength);
+  return { spyRegime, spyPrice: spy ? +spy.currentPrice.toFixed(2) : null, asOf: new Date().toISOString(), sectors };
+}
+
 // ─── HTTP Server ──────────────────────────────────────────────────────────────
 
 const server = http.createServer(async (req, res) => {
@@ -1416,6 +1491,15 @@ const server = http.createServer(async (req, res) => {
       const result = await analyzeDCA(parsedUrl.query.symbol, { portfolioWeight });
       res.writeHead(200);
       res.end(JSON.stringify(result, null, 2));
+    } catch (e) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  } else if (parsedUrl.pathname === '/api/sectors' && req.method === 'GET') {
+    try {
+      const data = await analyzeSectors();
+      res.writeHead(200);
+      res.end(JSON.stringify(data, null, 2));
     } catch (e) {
       res.writeHead(500);
       res.end(JSON.stringify({ error: e.message }));
@@ -1584,4 +1668,4 @@ server.listen(CONFIG.port, () => {
   `);
 });
 
-module.exports = { analyzeDCA, fetchYahooChartData, fetchAlphaVantageFundamentals, fetchFundFactsheet, scoreFundQuality, classifyFund };
+module.exports = { analyzeDCA, fetchYahooChartData, fetchAlphaVantageFundamentals, fetchFundFactsheet, scoreFundQuality, classifyFund, analyzeSectors };
