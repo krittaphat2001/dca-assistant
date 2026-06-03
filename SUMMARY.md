@@ -98,6 +98,13 @@ $145          ▓▓░░░░░░░░░  (Moderate)
 - **Debt/Equity** - Safety: <1.2 is healthy
 - **Dividend Yield** - Income: % annual return
 
+### 4b. Fund Factsheet (ETFs & funds only)
+- **Auto-detected** - a 📋 Factsheet tab appears for fund tickers (VOO, BND, QQQ), hidden for stocks
+- **Fund-quality grade (A–F)** - 0-100 across expense ratio, track record, diversification, risk/size
+- **Asset-class aware** - return thresholds adapt to equity / bond / money-market / allocation funds
+- **Holdings, sectors, fees, returns** - top-10 holdings, sector weightings, expense ratio, AUM, trailing returns
+- **Source**: Yahoo Finance `quoteSummary` (no extra key)
+
 ### 5. DCA Scoring System
 
 **Calculation:**

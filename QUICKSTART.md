@@ -74,6 +74,8 @@ Server: http://localhost:3000
 - Enter a ticker: **AAPL**, **MSFT**, **TSLA**
 - Click "Analyze"
 
+> 💡 Enter an **ETF or fund** ticker (e.g. **VOO**, **BND**, **QQQ**) and a **📋 Factsheet** tab appears with holdings, sectors, fees, trailing returns, and an A–F fund-quality grade. The tab stays hidden for ordinary stocks.
+
 ---
 
 ## 🎓 Quick Examples

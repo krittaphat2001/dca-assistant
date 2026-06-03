@@ -11,12 +11,24 @@ A real-time Dollar-Cost Averaging analysis tool for stocks. Enter a ticker, get 
 - Fetches **live market data** from Yahoo Finance (no key needed)
 - Pulls **fundamental data** from Alpha Vantage (free API key)
 - Calculates a **DCA Score (0–100)** combining technical + fundamental signals
-- Displays results across 5 tabs: **Overview, Chart, Technical, Fundamental, Market**
+- For **ETFs & funds**, shows a **Factsheet tab** with holdings, sectors, fees, and a fund-quality grade
+- Displays results across tabs: **Overview, Signals, Chart, Technical, Fundamental, Market** — plus a **Factsheet** tab for funds
 
 ### Chart tab
 - 60-day price chart with MA 20 and MA 50
 - Volume bars (green = bullish day, red = bearish)
 - RSI gauge with oversold / neutral / overbought zones
+
+### Factsheet tab (ETFs & funds only)
+For fund tickers (e.g. `VOO`, `BND`, `QQQ`) an extra **📋 Factsheet** tab appears automatically — it stays hidden for ordinary stocks. It shows:
+
+- **Fund-quality grade (A–F)** scoring the fund 0–100 across four pillars: expense ratio, track record, diversification, and risk/size. The return thresholds adapt to the fund's **asset class** (equity / bond / money-market / allocation), which is auto-detected and shown as a chip — so a ~2%/yr bond fund isn't judged against equity returns.
+- Expense ratio, yield, AUM, 3-year beta, category, fund family, and inception date
+- Trailing returns (YTD / 1Y / 3Y / 5Y / 10Y)
+- Asset allocation and sector weightings
+- Top-10 holdings
+
+Factsheet data comes from Yahoo Finance's `quoteSummary` endpoint — no extra key needed.
 
 ### DCA Score
 | Score | Signal | Meaning |
@@ -82,6 +94,7 @@ Open `dca-assistant.html` in your browser. Set **API Endpoint** to `http://local
 | Source | Data | Auth |
 |--------|------|------|
 | Yahoo Finance `/v8/finance/chart` | Price, 52-week range, OHLCV, volume | None |
+| Yahoo Finance `/v10/finance/quoteSummary` | Fund factsheet: expense ratio, holdings, sectors, returns, AUM (ETFs/funds) | None (crumb auto-handled) |
 | Alpha Vantage `OVERVIEW` | P/E, Forward P/E, EPS, ROE, Profit Margin, Beta, Dividend Yield, Market Cap | Free API key |
 
 ---
@@ -105,6 +118,8 @@ Example response:
   "fundamental": { "pe": "36.64", "forwardPE": "34.25", "eps": "8.25", "roe": "1.4150", "profitMargin": "0.2720", "beta": "1.06", "dividendYield": "0.35", "marketCap": 4439253451000 }
 }
 ```
+
+For **fund tickers** the response also includes a `factsheet` object — expense ratio, holdings, sectors, trailing returns, plus a `fundQuality` block with the `score`, `grade`, `assetClass`, and per-pillar breakdown. It is `null` for ordinary stocks.
 
 ---
 
