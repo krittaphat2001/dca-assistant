@@ -164,6 +164,12 @@ const SECTOR_EXAMPLES = {
   XLB: ['LIN', 'SHW', 'FCX']
 };
 
+// Broad-market / multi-sector funds: they give baseline exposure to every
+// sector, so they don't count as a *dedicated* tilt toward any one sector.
+const BROAD_FUNDS = new Set([
+  'VOO', 'VTI', 'SPY', 'IVV', 'SPLG', 'ITOT', 'SCHB', 'VV', 'MGC',
+  'QQQ', 'QQQM', 'VT', 'VEA', 'VXUS', 'VTV', 'VYM', 'SCHD', 'DGRO', 'VIG', 'NOBL', 'DIA', 'IWM', 'VUG']);
+
 // ─── HTTP helper ────────────────────────────────────────────────────────────
 
 function makeRequest(urlString, extraHeaders = {}) {
@@ -1487,7 +1493,7 @@ async function scanWatchlist(symbols, sseWrite, isCancelled) {
 
 // Fetches SPY + the 11 sector ETFs and ranks each sector by trend (vs its 50/200-day
 // MAs) and relative strength vs SPY, so the UI can show what's leading vs lagging now.
-async function analyzeSectors() {
+async function analyzeSectors(holdings = []) {
   const etfs = Object.keys(SECTOR_NAMES);
   const settled = await Promise.allSettled([
     fetchQuickChartData('SPY', '1y'),
@@ -1537,7 +1543,26 @@ async function analyzeSectors() {
     });
   }
   sectors.sort((a, b) => b.score - a.score || b.relStrength - a.relStrength);
-  return { spyRegime, spyPrice: spy ? +spy.currentPrice.toFixed(2) : null, asOf: new Date().toISOString(), sectors };
+
+  // Map the user's holdings to sectors so the UI can spot dedicated-exposure gaps.
+  // Broad funds count as baseline-everything, not a tilt; sector ETFs and individual
+  // stocks count as dedicated exposure to their sector.
+  const coverage = {};   // etf -> [symbols held in that sector]
+  const broad = [], unmapped = [];
+  for (const raw of holdings) {
+    const sym = String(raw).toUpperCase().trim();
+    if (!sym) continue;
+    if (SECTOR_NAMES[sym]) { (coverage[sym] = coverage[sym] || []).push(sym); }      // holds the sector ETF itself
+    else if (SECTOR_ETF[sym]) { const e = SECTOR_ETF[sym]; (coverage[e] = coverage[e] || []).push(sym); }
+    else if (BROAD_FUNDS.has(sym)) broad.push(sym);
+    else unmapped.push(sym);
+  }
+
+  return {
+    spyRegime, spyPrice: spy ? +spy.currentPrice.toFixed(2) : null,
+    asOf: new Date().toISOString(), sectors,
+    coverage, broad, unmapped
+  };
 }
 
 // ─── HTTP Server ──────────────────────────────────────────────────────────────
@@ -1563,7 +1588,9 @@ const server = http.createServer(async (req, res) => {
     }
   } else if (parsedUrl.pathname === '/api/sectors' && req.method === 'GET') {
     try {
-      const data = await analyzeSectors();
+      const holdings = (parsedUrl.query.holdings || '')
+        .split(',').map(s => s.trim()).filter(Boolean).slice(0, 60);
+      const data = await analyzeSectors(holdings);
       res.writeHead(200);
       res.end(JSON.stringify(data, null, 2));
     } catch (e) {

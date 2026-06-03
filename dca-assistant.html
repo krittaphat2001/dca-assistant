@@ -2503,6 +2503,7 @@
         // ── Market & Sectors: rotation snapshot + next moves ─────────
         let sectorData = null;
         let sectorsLoading = false;
+        let sectorError = null;
         let marketCollapsed = false;
         try { marketCollapsed = localStorage.getItem('portMarketCollapsed') === '1'; } catch {}
         function applyMarketCollapsed() {
@@ -2526,11 +2527,13 @@
             const body = document.getElementById('portMarketBody');
             body.innerHTML = '<div class="port-market-loading">Loading current sector data…</div>';
             try {
-                const r = await fetch(`${apiBase()}/api/sectors`);
-                if (r.ok) sectorData = await r.json();
-                else body.innerHTML = '<div class="port-market-loading">Could not load sector data (server returned ' + r.status + ').</div>';
+                const syms = portfolio.positions.map(p => p.symbol).join(',');
+                const r = await fetch(`${apiBase()}/api/sectors?holdings=${encodeURIComponent(syms)}`);
+                if (r.ok) { sectorData = await r.json(); sectorError = null; }
+                else { sectorError = `the server returned ${r.status} for /api/sectors — it may be running older code (restart it).`; body.innerHTML = '<div class="port-market-loading">Could not load sector data (' + r.status + ').</div>'; }
             } catch {
-                body.innerHTML = '<div class="port-market-loading">Could not reach the server for sector data. Make sure it\'s running and restarted to pick up the /api/sectors endpoint.</div>';
+                sectorError = `couldn't reach the server at ${apiBase()}. Make sure it's running.`;
+                body.innerHTML = '<div class="port-market-loading">Could not reach the server for sector data.</div>';
             }
             sectorsLoading = false;
             if (sectorData) { renderSectors(); renderActionPlan(); }
@@ -2538,13 +2541,15 @@
 
         async function suggestNextMove() {
             const btn = document.getElementById('portSuggestBtn');
+            // Immediate feedback on the Plan tab so it never looks idle while ~12 quotes load
+            switchPortSub('subPlan');
+            const list = document.getElementById('portActionList');
+            if (list) list.innerHTML = '<li>⏳ Reading your holdings and pulling live data for SPY + all 11 sectors… (a couple of seconds)</li>';
+            document.getElementById('portActionWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
             btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Thinking…';
             await loadSectors(true);
             btn.disabled = false; btn.textContent = orig;
-            // Land on the Plan tab, where the consolidated action list lives
-            switchPortSub('subPlan');
             renderActionPlan();
-            document.getElementById('portActionWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         function sectorChipStyle(status) {
@@ -2564,24 +2569,37 @@
             const review = computePortfolioReview();
             const getSec = etf => sd ? sd.sectors.find(x => x.etf === etf) : null;
             const tickerStr = arr => (arr || []).slice(0, 3).join(', ');
-            const timing = (sec, label) => {
-                if (!sec) return null;
+            // Generic per-sector entry-timing line, driven purely by the sector's trend
+            const sectorMove = sec => {
                 const sign = sec.relStrength >= 0 ? '+' : '';
+                const ideas = `Ideas: <strong>${sec.etf}</strong> or ${tickerStr(sec.examples)}.`;
                 if (sec.status === 'Leading' || sec.status === 'Bullish')
-                    return `<strong>${label}</strong> are trending up now — ${sec.etf} is above its 50-day and ${sign}${sec.relStrength}% vs SPY. A reasonable time to start the position you've wanted. Ideas: <strong>${sec.etf}</strong> (broad) or ${tickerStr(sec.examples)}. Scale in over a few weeks.`;
+                    return `<strong>${sec.name}</strong> has momentum now (${sec.etf} above its 50-day, ${sign}${sec.relStrength}% vs SPY) — a well-timed place to add diversification. ${ideas} Scale in over a few weeks.`;
                 if (sec.aboveMA50)
-                    return `<strong>${label}</strong> are holding up but trailing the market (${sec.etf} above its 50-day, ${sign}${sec.relStrength}% vs SPY, 20d ${sec.ret20}%). Fine to open a starter position and DCA — just no strong tailwind yet. Ideas: <strong>${sec.etf}</strong>, ${tickerStr(sec.examples)}.`;
-                return `<strong>${label}</strong> are out of favor (${sec.etf} below its 50-day, ${sign}${sec.relStrength}% vs SPY, 20d ${sec.ret20}%). For a long-term tilt you can buy this weakness, but momentum is against it — start small and DCA. Ideas: <strong>${sec.etf}</strong>, ${tickerStr(sec.examples)}.`;
+                    return `<strong>${sec.name}</strong> is holding up but trailing the market (${sign}${sec.relStrength}% vs SPY, 20d ${sec.ret20}%) — fine to open a starter position and DCA. ${ideas}`;
+                return `<strong>${sec.name}</strong> is out of favor (${sec.etf} below its 50-day, ${sign}${sec.relStrength}% vs SPY) — only worth it to buy long-term weakness; start small. ${ideas}`;
             };
 
-            // Your stated interests first
-            const mU = timing(getSec('XLU'), 'Utilities / power'); if (mU) moves.push(mU);
-            const mB = timing(getSec('XLB'), 'Materials');         if (mB) moves.push(mB);
-
-            // Strongest leader outside tech/comm and the two above — a diversification idea
-            if (sd) {
-                const leaders = sd.sectors.filter(x => (x.status === 'Leading' || x.status === 'Bullish') && !['XLK', 'XLC', 'XLU', 'XLB'].includes(x.etf));
-                if (leaders.length) { const L = leaders[0]; const sign = L.relStrength >= 0 ? '+' : ''; moves.push(`Beyond those, <strong>${L.name}</strong> is the strongest area right now (${sign}${L.relStrength}% vs SPY) — another way to diversify out of mega-cap tech. e.g. ${tickerStr(L.examples)}.`); }
+            // Sector diversification across ALL 11 sectors: find the ones you have no
+            // dedicated position in, then rank by current momentum and surface the best.
+            if (sd && sd.coverage) {
+                const held = new Set(Object.keys(sd.coverage));
+                const gaps = sd.sectors.filter(x => !held.has(x.etf));
+                const rank = { Leading: 0, Bullish: 1, Neutral: 2, Caution: 3, Lagging: 4 };
+                gaps.sort((a, b) => (rank[a.status] - rank[b.status]) || (b.relStrength - a.relStrength));
+                if (gaps.length) {
+                    const lead = gaps.length === 11 ? 'You hold no dedicated sector positions yet' : `You have no dedicated exposure to ${gaps.length} of the 11 sectors`;
+                    moves.push(`${lead} (your index funds cover them only thinly). Best-positioned to add now:`);
+                    gaps.slice(0, 2).forEach(sec => moves.push(sectorMove(sec)));
+                    const rest = gaps.slice(2);
+                    if (rest.length) moves.push(`Other gaps to consider as you diversify: ${rest.map(s => `${s.name} (${s.etf})`).join(', ')}.`);
+                } else {
+                    moves.push(`You hold dedicated positions across all 11 sectors — well diversified by sector.`);
+                }
+            } else if (sd) {
+                // Older server without holdings-coverage: still surface the strongest sectors
+                const top = [...sd.sectors].sort((a, b) => b.score - a.score).slice(0, 2);
+                if (top.length) { moves.push(`Strongest sectors right now (consider for diversification):`); top.forEach(sec => moves.push(sectorMove(sec))); }
             }
 
             // Tech-concentration awareness (you hold index funds + several mega-caps)
@@ -2599,7 +2617,9 @@
                 if (review.criticisms.some(c => /overbought|52-week high/i.test(c))) moves.push(`Much of your book is extended — favour DCA tranches over lump sums; the per-holding "This Week %" already paces this.`);
             }
 
-            if (!sd) moves.push(`Hit <strong>💡 Suggest</strong> to fold live sector timing (power, materials, diversification) into this list.`);
+            if (!sd) moves.push(sectorError
+                ? `⚠️ Couldn't load live sector data — ${sectorError} The buys/rebalance advice above still applies; retry 💡 Suggest for sector timing.`
+                : `Hit <strong>💡 Suggest</strong> to fold live sector timing and diversification gaps into this list.`);
             if (!moves.length) moves.push(`No pressing moves — keep DCAing to plan and revisit when allocations drift.`);
             return moves;
         }
