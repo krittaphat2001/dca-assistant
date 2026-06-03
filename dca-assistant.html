@@ -712,6 +712,18 @@
         .port-suggest-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .port-suggest-btn:not(:disabled):hover { opacity: 0.9; }
 
+        /* ── Portfolio sub-tabs ── */
+        .port-subtabs { display: flex; gap: 4px; padding: 12px 30px 0; background: #f8f9fa; border-bottom: 1px solid #dee2e6; }
+        .port-subtab-btn { padding: 10px 20px; border: none; background: transparent; color: #888; font-weight: 600; font-size: 13.5px; cursor: pointer; border-radius: 8px 8px 0 0; border-bottom: 3px solid transparent; margin-bottom: -1px; transition: color 0.15s, background 0.15s; }
+        .port-subtab-btn:hover { color: #555; background: rgba(102,126,234,0.08); }
+        .port-subtab-btn.active, .port-subtab-btn.active:hover { color: #667eea; border-bottom-color: #667eea; background: #fff; }
+        .port-subsection { display: none; }
+        .port-subsection.active { display: block; }
+
+        /* ── What To Do Now (consolidated action list) ── */
+        .port-action-wrap { padding: 16px 30px 4px; }
+        .port-action-card { border: 1px solid #e3e6ec; border-radius: 10px; padding: 6px 18px 14px; background: #fff; }
+
         /* ── Scan Watchlist ── */
         .sidebar-footer {
             padding: 12px;
@@ -1073,64 +1085,15 @@
                     <button id="portRefreshBtn" onclick="refreshPortfolio()" style="padding:10px 20px;white-space:nowrap">🔄 Refresh All</button>
                 </div>
 
-                <!-- This Week Insight Box (shown after refresh) -->
-                <div class="port-insight-box" id="portInsightBox" style="display:none">
-                    <div class="port-insight-title">💡 This Week's DCA Priority</div>
-                    <div id="portInsightContent"></div>
+                <!-- Sub-tabs -->
+                <div class="port-subtabs">
+                    <button class="port-subtab-btn active" data-sub="subHoldings" onclick="switchPortSub('subHoldings', this)">📁 Holdings</button>
+                    <button class="port-subtab-btn" data-sub="subPlan" onclick="switchPortSub('subPlan', this)">🧭 Plan</button>
+                    <button class="port-subtab-btn" data-sub="subInsights" onclick="switchPortSub('subInsights', this)">🔍 Insights</button>
                 </div>
 
-                <!-- Market & Sectors: rotation snapshot + personalized next moves -->
-                <div class="port-market-wrap" id="portMarketWrap" style="display:none">
-                    <div class="port-alloc-title port-review-header" id="portMarketHeader" onclick="toggleMarket()" title="Click to collapse / expand">
-                        <span>🧭 Market &amp; Sectors <span class="port-review-subtitle">— where the market is bullish now, what to do, and what to be wary of.</span></span>
-                        <span class="port-review-chevron" id="portMarketChevron">▾</span>
-                    </div>
-                    <div class="port-market-card" id="portMarketCard">
-                        <div id="portMarketBody">
-                            <div class="port-market-loading">Hit 💡 Suggest (top-right) to load the current sector picture and your next moves.</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Allocation Overview: 3 sleeves -->
-                <div class="port-alloc-wrap" id="portAllocWrap" style="display:none">
-                    <div class="port-alloc-title">🎯 Allocation by Type <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#999;font-size:11px">— current weight vs. your target. Reassign any holding's type in the table below.</span></div>
-                    <div class="port-alloc-grid" id="portAllocGrid"></div>
-                    <div class="port-alloc-tip" id="portAllocTip" style="display:none"></div>
-                </div>
-
-                <!-- Portfolio Review: score, critique, suggestions -->
-                <div class="port-review-wrap" id="portReviewWrap" style="display:none">
-                    <div class="port-alloc-title port-review-header" id="portReviewHeader" onclick="toggleReview()" title="Click to collapse / expand">
-                        <span>📋 Portfolio Review <span class="port-review-subtitle">— an honest score of how your book is built, what to watch, and what to do next.</span></span>
-                        <span class="port-review-headgrade" id="portReviewHeadGrade"></span>
-                        <span class="port-review-chevron" id="portReviewChevron">▾</span>
-                    </div>
-                    <div class="port-review-card" id="portReviewCard">
-                        <div class="port-review-top">
-                            <div class="port-review-scorebox">
-                                <div class="port-review-grade" id="portReviewGrade">—</div>
-                                <div class="port-review-score" id="portReviewScore"></div>
-                            </div>
-                            <div class="port-review-verdict">
-                                <div class="port-review-verdict-title" id="portReviewVerdict"></div>
-                                <div class="port-review-verdict-sub" id="portReviewVerdictSub"></div>
-                            </div>
-                        </div>
-                        <div class="port-review-pillars" id="portReviewPillars"></div>
-                        <div id="portReviewNote"></div>
-                        <div class="port-review-cols">
-                            <div>
-                                <div class="port-review-col-title" style="color:#c0392b">What to watch</div>
-                                <ul class="port-review-list port-crit" id="portReviewCrit"></ul>
-                            </div>
-                            <div>
-                                <div class="port-review-col-title" style="color:#1e8e3e">Suggestions</div>
-                                <ul class="port-review-list port-sugg" id="portReviewSugg"></ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <!-- ═══ HOLDINGS sub-tab ═══ -->
+                <div id="subHoldings" class="port-subsection active">
 
                 <!-- Add Position Form -->
                 <div class="portfolio-form">
@@ -1183,6 +1146,79 @@
                         <canvas id="portHistoryChart" height="80"></canvas>
                     </div>
                 </div>
+
+                </div><!-- end subHoldings -->
+
+                <!-- ═══ PLAN sub-tab ═══ -->
+                <div id="subPlan" class="port-subsection">
+
+                <!-- What To Do Now: one consolidated action list -->
+                <div class="port-action-wrap" id="portActionWrap">
+                    <div class="port-alloc-title">✅ What To Do Now <span class="port-review-subtitle">— your single prioritized action list: this week's buys, rebalancing, sector timing, and portfolio gaps. Hit 💡 Suggest to fold in live sector data.</span></div>
+                    <div class="port-action-card">
+                        <ul class="port-review-list port-moves" id="portActionList"></ul>
+                        <div id="portActionNote" style="font-size:11px;color:#aaa;margin-top:8px"></div>
+                    </div>
+                </div>
+
+                <!-- Allocation Overview: 3 sleeves -->
+                <div class="port-alloc-wrap" id="portAllocWrap" style="display:none">
+                    <div class="port-alloc-title">🎯 Allocation by Type <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#999;font-size:11px">— current weight vs. your target. Reassign any holding's type in the Holdings table.</span></div>
+                    <div class="port-alloc-grid" id="portAllocGrid"></div>
+                </div>
+
+                </div><!-- end subPlan -->
+
+                <!-- ═══ INSIGHTS sub-tab ═══ -->
+                <div id="subInsights" class="port-subsection">
+
+                <!-- Market & Sectors: rotation snapshot -->
+                <div class="port-market-wrap" id="portMarketWrap" style="display:none">
+                    <div class="port-alloc-title port-review-header" id="portMarketHeader" onclick="toggleMarket()" title="Click to collapse / expand">
+                        <span>🧭 Market &amp; Sectors <span class="port-review-subtitle">— where the market is bullish now, what to do, and what to be wary of.</span></span>
+                        <span class="port-review-chevron" id="portMarketChevron">▾</span>
+                    </div>
+                    <div class="port-market-card" id="portMarketCard">
+                        <div id="portMarketBody">
+                            <div class="port-market-loading">Hit 💡 Suggest (top-right) to load the current sector picture and your next moves.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Portfolio Review: score, critique, suggestions -->
+                <div class="port-review-wrap" id="portReviewWrap" style="display:none">
+                    <div class="port-alloc-title port-review-header" id="portReviewHeader" onclick="toggleReview()" title="Click to collapse / expand">
+                        <span>📋 Portfolio Review <span class="port-review-subtitle">— an honest score of how your book is built, what to watch, and what to do next.</span></span>
+                        <span class="port-review-headgrade" id="portReviewHeadGrade"></span>
+                        <span class="port-review-chevron" id="portReviewChevron">▾</span>
+                    </div>
+                    <div class="port-review-card" id="portReviewCard">
+                        <div class="port-review-top">
+                            <div class="port-review-scorebox">
+                                <div class="port-review-grade" id="portReviewGrade">—</div>
+                                <div class="port-review-score" id="portReviewScore"></div>
+                            </div>
+                            <div class="port-review-verdict">
+                                <div class="port-review-verdict-title" id="portReviewVerdict"></div>
+                                <div class="port-review-verdict-sub" id="portReviewVerdictSub"></div>
+                            </div>
+                        </div>
+                        <div class="port-review-pillars" id="portReviewPillars"></div>
+                        <div id="portReviewNote"></div>
+                        <div class="port-review-cols">
+                            <div>
+                                <div class="port-review-col-title" style="color:#c0392b">What to watch</div>
+                                <ul class="port-review-list port-crit" id="portReviewCrit"></ul>
+                            </div>
+                            <div>
+                                <div class="port-review-col-title" style="color:#1e8e3e">Suggestions</div>
+                                <ul class="port-review-list port-sugg" id="portReviewSugg"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                </div><!-- end subInsights -->
 
             </div><!-- end portfolioPage -->
 
@@ -2078,6 +2114,14 @@
             if (pageId === 'portfolioPage') { renderPortfolio(); loadSectors(false); }
         }
 
+        // Sub-tabs within My Portfolio: Holdings / Plan / Insights
+        function switchPortSub(id, btn) {
+            document.querySelectorAll('.port-subsection').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.port-subtab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            (btn || document.querySelector(`.port-subtab-btn[data-sub="${id}"]`))?.classList.add('active');
+        }
+
         // ── Portfolio state ────────────────────────────────────────
         let portfolio = { positions: [] };
         let portfolioHistory = [];
@@ -2476,7 +2520,7 @@
 
         async function loadSectors(force) {
             if (sectorsLoading) return;
-            if (sectorData && !force) { renderSectors(); return; }
+            if (sectorData && !force) { renderSectors(); renderActionPlan(); return; }
             sectorsLoading = true;
             document.getElementById('portMarketWrap').style.display = '';
             const body = document.getElementById('portMarketBody');
@@ -2489,17 +2533,18 @@
                 body.innerHTML = '<div class="port-market-loading">Could not reach the server for sector data. Make sure it\'s running and restarted to pick up the /api/sectors endpoint.</div>';
             }
             sectorsLoading = false;
-            if (sectorData) renderSectors();
+            if (sectorData) { renderSectors(); renderActionPlan(); }
         }
 
         async function suggestNextMove() {
             const btn = document.getElementById('portSuggestBtn');
-            marketCollapsed = false; applyMarketCollapsed();
-            document.getElementById('portMarketWrap').style.display = '';
             btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Thinking…';
             await loadSectors(true);
             btn.disabled = false; btn.textContent = orig;
-            document.getElementById('portMarketWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Land on the Plan tab, where the consolidated action list lives
+            switchPortSub('subPlan');
+            renderActionPlan();
+            document.getElementById('portActionWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         function sectorChipStyle(status) {
@@ -2554,7 +2599,7 @@
                 if (review.criticisms.some(c => /overbought|52-week high/i.test(c))) moves.push(`Much of your book is extended — favour DCA tranches over lump sums; the per-holding "This Week %" already paces this.`);
             }
 
-            if (!sd) moves.unshift(`Click "refresh sectors" to load the live sector picture.`);
+            if (!sd) moves.push(`Hit <strong>💡 Suggest</strong> to fold live sector timing (power, materials, diversification) into this list.`);
             if (!moves.length) moves.push(`No pressing moves — keep DCAing to plan and revisit when allocations drift.`);
             return moves;
         }
@@ -2571,17 +2616,60 @@
                 const sign = x.relStrength >= 0 ? '+' : '';
                 return `<span class="port-sector-chip" style="background:${st.bg};border-color:${st.border};color:${st.color}" title="${x.status} · ${x.aboveMA50 ? 'above' : 'below'} 50-day, ${x.aboveMA200 ? 'above' : 'below'} 200-day · 20d ${x.ret20}%">${x.name} <span class="rs">${sign}${x.relStrength}%</span> <span class="ex">${(x.examples || []).slice(0, 3).join(' ')}</span></span>`;
             };
-            const moves = buildNextMoves();
             document.getElementById('portMarketBody').innerHTML = `
                 <div class="port-market-regime">Market regime: <b>${s.spyRegime}</b>${s.spyPrice ? ` · SPY $${s.spyPrice}` : ''} <span style="color:#aaa">· % = 20/60-day strength vs SPY</span></div>
                 <div class="port-market-cols">
                     <div><div class="port-market-col-title" style="color:#1e8e3e">🔥 Wind at their back</div>${bullish.length ? bullish.map(chip).join('') : '<span style="color:#999;font-size:12px">No clearly leading sectors right now.</span>'}</div>
                     <div><div class="port-market-col-title" style="color:#c0392b">⚠️ Be aware / lagging</div>${aware.length ? aware.map(chip).join('') : '<span style="color:#999;font-size:12px">Nothing notably weak.</span>'}</div>
                 </div>
-                <hr class="port-detail-section-sep" style="margin:14px 0">
-                <div class="port-market-col-title" style="color:#2a6cf0">💡 Your next moves</div>
-                <ul class="port-review-list port-moves">${moves.map(m => `<li>${m}</li>`).join('')}</ul>
-                <div style="font-size:11px;color:#aaa;margin-top:10px">As of ${new Date(s.asOf).toLocaleString()} · <a href="#" onclick="event.preventDefault();loadSectors(true)" style="color:#888">refresh sectors</a></div>`;
+                <div style="font-size:11px;color:#aaa;margin-top:12px">As of ${new Date(s.asOf).toLocaleString()} · <a href="#" onclick="event.preventDefault();loadSectors(true)" style="color:#888">refresh sectors</a> · turn this into actions in the <a href="#" onclick="event.preventDefault();switchPortSub('subPlan')" style="color:#888">Plan tab</a>.</div>`;
+        }
+
+        // Consolidated "What To Do Now": this week's buys + rebalance + sector timing + gaps
+        function renderActionPlan() {
+            const wrap = document.getElementById('portActionWrap');
+            if (!wrap) return;
+            const list = document.getElementById('portActionList');
+            const note = document.getElementById('portActionNote');
+            const pos = portfolio.positions;
+            const fmt0 = n => (+n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+            if (!pos.length) { list.innerHTML = '<li>Add a position in the <strong>Holdings</strong> tab to get tailored actions.</li>'; note.textContent = ''; return; }
+
+            const budget = parseFloat(document.getElementById('portBudget')?.value) || 0;
+            const items = [];
+
+            // 1. This week's buys (by allocation %, scaled to budget if set)
+            const scored = pos.filter(p => p.allocationPct != null && p.allocationPct > 0).sort((a, b) => b.allocationPct - a.allocationPct);
+            if (scored.length) {
+                if (budget) {
+                    const parts = scored.slice(0, 6).map(p => `<strong>$${fmt0(budget * p.allocationPct / 100)}</strong> ${p.symbol}`);
+                    items.push(`<strong>This week</strong> (of your $${fmt0(budget)} budget): ${parts.join(' · ')}.`);
+                } else {
+                    const parts = scored.slice(0, 6).map(p => `${p.symbol} (${p.allocationPct}%)`);
+                    items.push(`<strong>This week</strong>, by DCA score favour: ${parts.join(' · ')}. Set a weekly budget in Holdings to see $ amounts.`);
+                }
+            } else if (pos.some(p => p.dcaScore == null)) {
+                items.push(`Hit <strong>🔄 Refresh All</strong> to score holdings and get this week's buy priorities.`);
+            }
+
+            // 2. Rebalance — the most-underweight sleeve
+            let total = 0; const sw = { growth: 0, core: 0, safe: 0 };
+            pos.forEach(p => { const v = p.shares * (p.currentPrice || p.avgCost); total += v; sw[sleeveOf(p)] += v; });
+            if (total > 0) {
+                let worst = null, gap = 0;
+                ['growth', 'core', 'safe'].forEach(k => { const g = targetFor(k) - (sw[k] / total * 100); if (g > gap) { gap = g; worst = k; } });
+                if (worst && gap >= 3) { const m = SLEEVES[worst]; items.push(`<strong>Rebalance</strong>: your ${m.emoji} ${m.label} sleeve is <strong>${gap.toFixed(0)}%</strong> under target — send new buys there first.`); }
+                const tgtSum = ['growth', 'core', 'safe'].reduce((a, k) => a + targetFor(k), 0);
+                if (Math.abs(tgtSum - 100) > 0.5) items.push(`Your sleeve targets sum to ${tgtSum.toFixed(0)}%, not 100% — adjust them in the allocation cards below.`);
+            }
+
+            // 3. Sector timing (power & materials) + portfolio gaps
+            items.push(...buildNextMoves());
+
+            list.innerHTML = items.map(t => `<li>${t}</li>`).join('');
+            note.innerHTML = sectorData
+                ? `Sector timing as of ${new Date(sectorData.asOf).toLocaleString()}.`
+                : `Tip: hit <strong>💡 Suggest</strong> (top-right) to fold live sector timing into this list.`;
         }
 
         // ── Helpers ─────────────────────────────────────────────────
@@ -2657,22 +2745,6 @@
             const lastUp = positions.reduce((m, p) => p.lastUpdated && p.lastUpdated > m ? p.lastUpdated : m, '');
             document.getElementById('portLastUpdated').textContent = lastUp ? new Date(lastUp).toLocaleString() : 'Not refreshed yet';
 
-            // ── Insight box ──
-            const scored = positions.filter(p => p.dcaScore != null).sort((a, b) => b.dcaScore - a.dcaScore);
-            const insightBox = document.getElementById('portInsightBox');
-            if (scored.length) {
-                insightBox.style.display = '';
-                const chips = scored.map(p => {
-                    const ac = portAllocColor(p.allocationPct);
-                    const dollarPart = budget && p.allocationPct ? ` · <strong>$${fmt0(budget * p.allocationPct / 100)}</strong>` : '';
-                    return `<span class="port-insight-chip"><span class="port-score-badge" style="background:${scoreColor(p.dcaScore)};font-size:10px;padding:1px 6px">${p.dcaScore.toFixed(0)}</span><strong>${p.symbol}</strong><span style="color:${ac}">${p.allocationPct ?? 0}%${dollarPart}</span></span>`;
-                }).join('');
-                document.getElementById('portInsightContent').innerHTML = chips +
-                    (budget ? `<div style="font-size:11px;color:#888;margin-top:6px">Amounts shown are based on your $${fmt0(budget)} weekly budget.</div>` : '');
-            } else {
-                insightBox.style.display = 'none';
-            }
-
             // ── Per-sleeve aggregates (overview + table subtotals) ──
             const sleeveAgg = { growth: { inv: 0, val: 0, n: 0 }, core: { inv: 0, val: 0, n: 0 }, safe: { inv: 0, val: 0, n: 0 } };
             positions.forEach(p => {
@@ -2684,6 +2756,7 @@
             });
             renderAllocation(sleeveAgg, totalValue, budget, fmt, fmt0);
             renderReview();
+            renderActionPlan();
             if (sectorData) renderSectors();
 
             // ── Table ──
@@ -2808,11 +2881,11 @@
             return `<select class="port-sleeve-select" onchange="setSleeve('${p.symbol}', this.value)" title="Portfolio type — Auto-detected, change to override">${opts.join('')}</select>`;
         }
 
-        // Allocation overview: 3 sleeve cards (current weight vs editable target) + rebalance tip
+        // Allocation overview: 3 sleeve cards (current weight vs editable target).
+        // Rebalance guidance lives in the consolidated "What To Do Now" list.
         function renderAllocation(agg, totalValue, budget, fmt, fmt0) {
             const wrap = document.getElementById('portAllocWrap');
             const grid = document.getElementById('portAllocGrid');
-            const tipEl = document.getElementById('portAllocTip');
             if (!portfolio.positions.length || totalValue <= 0) { wrap.style.display = 'none'; return; }
             wrap.style.display = '';
 
@@ -2834,25 +2907,6 @@
                     <div class="port-alloc-targetrow">target <input type="number" min="0" max="100" step="1" value="${tgt}" onchange="setTarget('${sl}', this.value)" onclick="event.stopPropagation()">% <span class="port-alloc-delta ${dCls}">${dTxt}</span></div>
                 </div>`;
             }).join('');
-
-            // Rebalance tip: the most-underweight sleeve is where new money does the most good
-            let worst = null, worstGap = 0;
-            SLEEVE_ORDER.forEach(sl => {
-                const gap = targetFor(sl) - (agg[sl].val / totalValue * 100);
-                if (gap > worstGap) { worstGap = gap; worst = sl; }
-            });
-            const tgtSum = SLEEVE_ORDER.reduce((s, sl) => s + targetFor(sl), 0);
-            let tip;
-            if (worst && worstGap >= 3) {
-                const meta = SLEEVES[worst];
-                const dollar = budget ? ` Of this week's $${fmt0(budget)} budget, steer new buys toward this sleeve to rebalance.` : '';
-                tip = `Your <strong style="color:${meta.color}">${meta.emoji} ${meta.label}</strong> sleeve is <strong>${worstGap.toFixed(0)}%</strong> below target — that's where adding now does the most to rebalance.${dollar}`;
-            } else {
-                tip = `Your allocation is close to target across all three types — nicely balanced.`;
-            }
-            if (Math.abs(tgtSum - 100) > 0.5) tip += ` <span style="color:#e67e22">Heads up: your targets sum to ${tgtSum.toFixed(0)}%, not 100%.</span>`;
-            tipEl.innerHTML = tip;
-            tipEl.style.display = '';
         }
 
         function renderHistory() {
