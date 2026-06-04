@@ -435,6 +435,20 @@ async function fetchQuickChartData(symbol, range = '3mo') {
   return { symbol, currentPrice, ma20, ma50, ma200, ret20, ret60, closes };
 }
 
+// Live USD -> THB exchange rate (cached briefly to avoid hammering Yahoo)
+let _fxCache = { rate: null, ts: 0 };
+async function fetchUsdThbRate() {
+  const now = Date.now();
+  if (_fxCache.rate && now - _fxCache.ts < 10 * 60 * 1000) return _fxCache.rate;
+  const u = 'https://query1.finance.yahoo.com/v8/finance/chart/THB=X?interval=1d&range=5d';
+  const data = await makeRequest(u);
+  const meta = data.chart?.result?.[0]?.meta;
+  const rate = meta?.regularMarketPrice;
+  if (!rate || !isFinite(rate)) throw new Error('USD/THB rate unavailable');
+  _fxCache = { rate, ts: now };
+  return rate;
+}
+
 // Full chart data for the analyzed stock
 async function fetchYahooChartData(symbol) {
   console.log(`📊 Fetching Yahoo Finance chart data for ${symbol}...`);
@@ -1593,6 +1607,15 @@ const server = http.createServer(async (req, res) => {
       const data = await analyzeSectors(holdings);
       res.writeHead(200);
       res.end(JSON.stringify(data, null, 2));
+    } catch (e) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  } else if (parsedUrl.pathname === '/api/fx' && req.method === 'GET') {
+    try {
+      const rate = await fetchUsdThbRate();
+      res.writeHead(200);
+      res.end(JSON.stringify({ base: 'USD', quote: 'THB', rate, asOf: new Date().toISOString() }));
     } catch (e) {
       res.writeHead(500);
       res.end(JSON.stringify({ error: e.message }));
