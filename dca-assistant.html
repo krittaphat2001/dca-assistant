@@ -1293,16 +1293,27 @@
             const t = thbAmt(usd);
             return t ? ` <span class="thb">≈ ${t}</span>` : '';
         }
+        function applyFxRate(rate) {
+            if (!rate || !isFinite(rate)) return false;
+            usdThbRate = rate;
+            localStorage.setItem('dca_usdthb', JSON.stringify(rate));
+            try { if (typeof renderPortfolio === 'function' && portfolio && portfolio.positions && portfolio.positions.length) renderPortfolio(); } catch (e) {}
+            try { if (currentData) displayResults(currentData); } catch (e) {}
+            return true;
+        }
         async function loadFxRate() {
+            // 1) our server endpoint (live, cached server-side)
             try {
-                const r = await fetch('/api/fx').then(r => r.json());
-                if (r && r.rate && isFinite(r.rate)) {
-                    usdThbRate = r.rate;
-                    localStorage.setItem('dca_usdthb', JSON.stringify(r.rate));
-                    if (typeof renderPortfolio === 'function' && portfolio && portfolio.length) renderPortfolio();
-                    if (currentData) displayResults(currentData);
-                }
-            } catch (e) { /* keep cached/last rate; THB simply hidden if none */ }
+                const r = await fetch('/api/fx').then(r => r.ok ? r.json() : null);
+                if (r && applyFxRate(r.rate)) return;
+            } catch (e) {}
+            // 2) public FX API directly (works even if the server lacks /api/fx)
+            try {
+                const r = await fetch('https://open.er-api.com/v6/latest/USD').then(r => r.json());
+                if (r && r.rates && applyFxRate(r.rates.THB)) return;
+            } catch (e) {}
+            // 3) cached value already loaded into usdThbRate, else a sane default
+            if (usdThbRate == null) applyFxRate(32.5);
         }
 
         // ── Watchlist ──────────────────────────────────────────────
