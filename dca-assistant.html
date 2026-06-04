@@ -5,7 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DCA Assistant - Real-Time Stock Analysis</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
+        /* ── Design tokens: refined dark terminal ── */
+        :root {
+            --bg: #0a0e17;
+            --bg-grid: rgba(120,140,180,0.04);
+            --surface: #121826;
+            --surface-2: #1a2030;
+            --border: #283041;
+            --text: #e8ebf2;
+            --muted: #97a3bb;
+            --dim: #69748c;
+            --faint: #49546b;
+            --accent: #4c8dff;
+            --accent-2: #6f6bff;
+            --up: #26d07c;
+            --down: #ff5d6c;
+            --warn: #f5a524;
+            --font-ui: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -13,11 +36,26 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: var(--font-ui);
+            color: var(--text);
+            background-color: var(--bg);
+            background-image:
+                linear-gradient(var(--bg-grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+            background-size: 44px 44px;
             min-height: 100vh;
             padding: 20px;
+            -webkit-font-smoothing: antialiased;
         }
+        /* monospace for all numeric / data readouts */
+        .port-stat-value, .port-alloc-cur, .port-review-grade, .port-review-score,
+        .port-score-badge, .port-action-badge, .portfolio-table td, .metric-value,
+        .port-sector-chip .rs, .port-pill, #portReviewHeadGrade { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+        .port-symbol, .wl-symbol { font-family: var(--font-mono); letter-spacing: -0.02em; }
+        /* dark form controls */
+        input, select, textarea { background: var(--surface-2); color: var(--text); }
+        input::placeholder { color: var(--faint); }
+        select option { background: var(--surface-2); color: var(--text); }
 
         .page-layout {
             max-width: 1480px;
@@ -31,7 +69,7 @@
         .sidebar {
             width: 210px;
             flex-shrink: 0;
-            background: white;
+            background: var(--surface);
             border-radius: 12px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             overflow: hidden;
@@ -43,7 +81,7 @@
         }
 
         .sidebar-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
             color: white;
             padding: 14px 16px;
             font-size: 13px;
@@ -59,12 +97,12 @@
 
         .wl-item {
             padding: 11px 14px;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid var(--border);
             cursor: pointer;
             transition: background 0.15s;
         }
 
-        .wl-item:hover { background: #f8f9fa; }
+        .wl-item:hover { background: var(--surface-2); }
         .wl-item:last-child { border-bottom: none; }
 
         .wl-item-top {
@@ -74,12 +112,12 @@
             margin-bottom: 3px;
         }
 
-        .wl-symbol { font-weight: 700; font-size: 14px; color: #333; }
+        .wl-symbol { font-weight: 700; font-size: 14px; color: var(--text); }
 
         .wl-remove {
             background: none;
             border: none;
-            color: #ccc;
+            color: var(--faint);
             font-size: 15px;
             padding: 0 2px;
             cursor: pointer;
@@ -88,7 +126,7 @@
         }
         .wl-remove:hover { background: none; color: #f44336; }
 
-        .wl-price { font-size: 12px; color: #555; margin-bottom: 5px; }
+        .wl-price { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
 
         .wl-score {
             display: inline-block;
@@ -100,13 +138,13 @@
             margin-bottom: 2px;
         }
 
-        .wl-rec { font-size: 10px; color: #666; margin-bottom: 1px; }
-        .wl-age { font-size: 10px; color: #bbb; }
+        .wl-rec { font-size: 10px; color: var(--muted); margin-bottom: 1px; }
+        .wl-age { font-size: 10px; color: var(--faint); }
 
         .wl-empty {
             padding: 28px 16px;
             text-align: center;
-            color: #bbb;
+            color: var(--faint);
             font-size: 12px;
             line-height: 1.7;
         }
@@ -115,14 +153,14 @@
         .container {
             flex: 1;
             min-width: 0;
-            background: white;
+            background: var(--surface);
             border-radius: 12px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             overflow: hidden;
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
             color: white;
             padding: 30px;
             text-align: center;
@@ -140,8 +178,8 @@
 
         .input-section {
             padding: 30px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
+            background: var(--surface-2);
+            border-bottom: 1px solid var(--border);
         }
 
         .input-group {
@@ -160,14 +198,14 @@
             display: block;
             font-weight: 600;
             margin-bottom: 8px;
-            color: #333;
+            color: var(--text);
             font-size: 14px;
         }
 
         .input-field input {
             width: 100%;
             padding: 12px;
-            border: 2px solid #dee2e6;
+            border: 2px solid var(--border);
             border-radius: 6px;
             font-size: 14px;
             transition: border-color 0.3s;
@@ -175,12 +213,12 @@
 
         .input-field input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: var(--accent);
         }
 
         button {
             padding: 12px 25px;
-            background: #667eea;
+            background: var(--accent);
             color: white;
             border: none;
             border-radius: 6px;
@@ -191,11 +229,11 @@
         }
 
         button:hover {
-            background: #764ba2;
+            background: var(--accent-2);
         }
 
         button:disabled {
-            background: #ccc;
+            background: var(--faint);
             cursor: not-allowed;
         }
 
@@ -211,23 +249,23 @@
         }
 
         .recommendation-box.strong-buy {
-            background: #e8f5e9;
-            border-color: #4caf50;
+            background: rgba(38,208,124,0.12);
+            border-color: var(--up);
         }
 
         .recommendation-box.buy {
-            background: #e3f2fd;
-            border-color: #2196f3;
+            background: rgba(76,141,255,0.12);
+            border-color: var(--accent);
         }
 
         .recommendation-box.hold {
-            background: #fff9c4;
-            border-color: #fbc02d;
+            background: rgba(245,165,36,0.12);
+            border-color: var(--warn);
         }
 
         .recommendation-box.wait {
-            background: #ffebee;
-            border-color: #f44336;
+            background: rgba(255,93,108,0.12);
+            border-color: var(--down);
         }
 
         .recommendation-text {
@@ -238,7 +276,7 @@
 
         .recommendation-score {
             font-size: 14px;
-            color: #666;
+            color: var(--muted);
         }
 
         .metrics-grid {
@@ -249,15 +287,15 @@
         }
 
         .metric-card {
-            background: #f8f9fa;
+            background: var(--surface-2);
             padding: 15px;
             border-radius: 8px;
-            border: 1px solid #dee2e6;
+            border: 1px solid var(--border);
         }
 
         .metric-label {
             font-size: 12px;
-            color: #666;
+            color: var(--muted);
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 8px;
@@ -266,19 +304,19 @@
         .metric-value {
             font-size: 20px;
             font-weight: 700;
-            color: #333;
+            color: var(--text);
         }
 
         .metric-subtext {
             font-size: 12px;
-            color: #999;
+            color: var(--dim);
             margin-top: 4px;
         }
 
         .tabs {
             display: flex;
             gap: 5px;
-            border-bottom: 2px solid #dee2e6;
+            border-bottom: 2px solid var(--border);
             margin-bottom: 20px;
             flex-wrap: wrap;
         }
@@ -288,7 +326,7 @@
             background: transparent;
             border: none;
             cursor: pointer;
-            color: #666;
+            color: var(--muted);
             font-weight: 600;
             font-size: 14px;
             border-bottom: 3px solid transparent;
@@ -296,8 +334,8 @@
         }
 
         .tab-button.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
+            color: var(--accent);
+            border-bottom-color: var(--accent);
         }
 
         .tab-content {
@@ -309,25 +347,25 @@
         }
 
         .error {
-            background: #ffebee;
-            color: #c62828;
+            background: rgba(255,93,108,0.12);
+            color: #ff7480;
             padding: 15px;
             border-radius: 6px;
             margin-bottom: 20px;
-            border-left: 4px solid #f44336;
+            border-left: 4px solid var(--down);
         }
 
         .loading {
             text-align: center;
             padding: 40px;
-            color: #666;
+            color: var(--muted);
             font-size: 16px;
         }
 
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            color: #999;
+            color: var(--dim);
         }
 
         .empty-state-icon {
@@ -336,39 +374,39 @@
         }
 
         .footer {
-            background: #f8f9fa;
-            border-top: 1px solid #dee2e6;
+            background: var(--surface-2);
+            border-top: 1px solid var(--border);
             padding: 20px;
             text-align: center;
-            color: #666;
+            color: var(--muted);
             font-size: 12px;
         }
 
         /* ── Explanation paragraph ── */
         .explanation {
-            background: white;
-            border: 1px solid #dee2e6;
+            background: var(--surface);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 16px 18px;
             margin-bottom: 18px;
             line-height: 1.7;
             font-size: 14px;
-            color: #444;
+            color: var(--muted);
         }
 
         /* ── Score breakdown bars ── */
-        .score-breakdown { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px; margin-bottom: 18px; }
-        .score-breakdown-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .score-breakdown { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 18px; }
+        .score-breakdown-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
         .score-bar-row { margin-bottom: 10px; }
         .score-bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
-        .score-bar-track { background: #e9ecef; border-radius: 4px; height: 9px; }
+        .score-bar-track { background: var(--surface-2); border-radius: 4px; height: 9px; }
         .score-bar-fill { height: 9px; border-radius: 4px; transition: width 0.4s; }
 
         /* ── Position sizing callout ── */
         .allocation-box {
             display: inline-block;
             text-align: center;
-            background: white;
+            background: var(--surface);
             border-radius: 8px;
             padding: 12px 22px;
             border: 1px solid currentColor;
@@ -376,19 +414,19 @@
             margin-left: 16px;
         }
         .allocation-pct { font-size: 34px; font-weight: 800; line-height: 1; }
-        .allocation-label { font-size: 11px; color: #888; margin-top: 3px; }
+        .allocation-label { font-size: 11px; color: var(--dim); margin-top: 3px; }
 
         /* ── Quadrant readout ── */
         .quadrant-readout {
             font-size: 13px;
-            color: #666;
+            color: var(--muted);
             margin-top: 6px;
         }
 
         /* ── Two-axis quadrant chart ── */
         .quadrant-chart-box {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 14px 16px;
             margin-bottom: 18px;
@@ -399,7 +437,7 @@
         .quadrant-chart-title {
             font-size: 13px;
             font-weight: 700;
-            color: #333;
+            color: var(--text);
             margin-bottom: 10px;
             text-transform: uppercase;
             letter-spacing: 0.4px;
@@ -409,7 +447,7 @@
             position: relative;
             width: 160px;
             height: 160px;
-            border: 2px solid #bbb;
+            border: 2px solid var(--faint);
             border-radius: 4px;
             overflow: hidden;
         }
@@ -427,16 +465,16 @@
             line-height: 1.2;
             box-sizing: border-box;
         }
-        .quadrant-cell.q-tl { top: 0; left: 0; background: rgba(33,150,243,0.12); color: #1565c0; border-right: 1px solid #bbb; border-bottom: 1px solid #bbb; }
-        .quadrant-cell.q-tr { top: 0; right: 0; background: rgba(76,175,80,0.12); color: #2e7d32; border-bottom: 1px solid #bbb; }
-        .quadrant-cell.q-bl { bottom: 0; left: 0; background: rgba(244,67,54,0.12); color: #c62828; border-right: 1px solid #bbb; }
+        .quadrant-cell.q-tl { top: 0; left: 0; background: rgba(33,150,243,0.12); color: #1565c0; border-right: 1px solid var(--faint); border-bottom: 1px solid var(--faint); }
+        .quadrant-cell.q-tr { top: 0; right: 0; background: rgba(76,175,80,0.12); color: #2e7d32; border-bottom: 1px solid var(--faint); }
+        .quadrant-cell.q-bl { bottom: 0; left: 0; background: rgba(244,67,54,0.12); color: #c62828; border-right: 1px solid var(--faint); }
         .quadrant-cell.q-br { bottom: 0; right: 0; background: rgba(255,152,0,0.12); color: #e65100; }
         .quadrant-dot {
             position: absolute;
             width: 13px;
             height: 13px;
             border-radius: 50%;
-            background: #333;
+            background: var(--text);
             border: 2px solid white;
             box-shadow: 0 1px 4px rgba(0,0,0,0.5);
             transform: translate(-50%, 50%);
@@ -445,55 +483,55 @@
         }
         .quadrant-caption {
             font-size: 10px;
-            color: #999;
+            color: var(--dim);
             margin-top: 6px;
             text-align: center;
             line-height: 1.4;
         }
 
         /* ── Risk flags ── */
-        .risk-flags { background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; padding: 12px 16px; margin-bottom: 18px; font-size: 12px; color: #6d4c0a; }
+        .risk-flags { background: rgba(245,165,36,0.10); border: 1px solid rgba(245,165,36,0.32); border-radius: 8px; padding: 12px 16px; margin-bottom: 18px; font-size: 12px; color: #f5b955; }
         .risk-flags-title { font-weight: 700; margin-bottom: 4px; }
 
         /* ── Signals table ── */
         .signal-section { margin-bottom: 22px; }
-        .signal-section-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
-        .signal-table { width: 100%; border-collapse: collapse; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden; font-size: 13px; }
-        .signal-table th { background: #f8f9fa; padding: 8px 12px; text-align: left; font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
-        .signal-table td { padding: 9px 12px; border-top: 1px solid #f0f0f0; }
+        .signal-section-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .signal-table { width: 100%; border-collapse: collapse; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 13px; }
+        .signal-table th { background: var(--surface-2); padding: 8px 12px; text-align: left; font-size: 11px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+        .signal-table td { padding: 9px 12px; border-top: 1px solid var(--border); }
         .signal-badge { display: inline-block; color: white; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
 
         /* ── Factsheet ── */
         .fs-section { margin: 22px 0; }
-        .fs-section-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .fs-section-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
         .fs-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; font-size: 13px; }
-        .fs-bar-label { flex: 0 0 150px; color: #555; }
-        .fs-bar-track { flex: 1; height: 16px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
-        .fs-bar-fill { height: 100%; background: linear-gradient(90deg,#667eea,#764ba2); border-radius: 4px; }
-        .fs-bar-val { flex: 0 0 54px; text-align: right; color: #333; font-weight: 600; }
+        .fs-bar-label { flex: 0 0 150px; color: var(--muted); }
+        .fs-bar-track { flex: 1; height: 16px; background: var(--border); border-radius: 4px; overflow: hidden; }
+        .fs-bar-fill { height: 100%; background: linear-gradient(90deg,var(--accent),var(--accent-2)); border-radius: 4px; }
+        .fs-bar-val { flex: 0 0 54px; text-align: right; color: var(--text); font-weight: 600; }
         .fs-perf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; }
-        .fs-perf-card { text-align: center; padding: 12px 8px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; }
-        .fs-perf-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.3px; }
+        .fs-perf-card { text-align: center; padding: 12px 8px; border: 1px solid #eee; border-radius: 8px; background: var(--surface-2); }
+        .fs-perf-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.3px; }
         .fs-perf-val { font-size: 18px; font-weight: 700; margin-top: 4px; }
 
         /* ── Fund quality score ── */
         .fq-banner { display: flex; align-items: center; gap: 18px; padding: 18px 22px; border-radius: 12px; margin: 6px 0 20px; border: 1px solid #eee; }
         .fq-grade { flex: 0 0 auto; width: 66px; height: 66px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 800; color: #fff; }
         .fq-meta { flex: 1; }
-        .fq-score-line { font-size: 22px; font-weight: 700; color: #222; }
-        .fq-score-line small { font-size: 14px; color: #888; font-weight: 600; }
-        .fq-class-chip { font-size: 11px; font-weight: 700; color: #555; background: #eef0f5; border: 1px solid #dde0e8; border-radius: 12px; padding: 2px 10px; margin-left: 10px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.4px; }
-        .fq-verdict { font-size: 14px; color: #555; margin-top: 2px; }
+        .fq-score-line { font-size: 22px; font-weight: 700; color: var(--text); }
+        .fq-score-line small { font-size: 14px; color: var(--dim); font-weight: 600; }
+        .fq-class-chip { font-size: 11px; font-weight: 700; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; margin-left: 10px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.4px; }
+        .fq-verdict { font-size: 14px; color: var(--muted); margin-top: 2px; }
         .fq-comp { margin-top: 10px; }
         .fq-comp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; font-size: 13px; }
-        .fq-comp-label { flex: 0 0 130px; font-weight: 600; color: #333; }
+        .fq-comp-label { flex: 0 0 130px; font-weight: 600; color: var(--text); }
         .fq-comp-track { flex: 0 0 120px; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
         .fq-comp-fill { height: 100%; border-radius: 4px; }
-        .fq-comp-detail { flex: 1; color: #666; }
+        .fq-comp-detail { flex: 1; color: var(--muted); }
 
         .chart-section { margin-bottom: 24px; }
-        .chart-title { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .chart-wrapper { position: relative; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; padding: 12px; }
+        .chart-title { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .chart-wrapper { position: relative; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--border); padding: 12px; }
 
         .rsi-gauge { margin: 4px 0 8px; }
         .rsi-track { position: relative; height: 28px; border-radius: 6px; overflow: hidden; display: flex; }
@@ -502,7 +540,7 @@
         .rsi-track .z-neutral   { background: #ff9800; width: 40%; }
         .rsi-track .z-overbought{ background: #f44336; width: 30%; }
         .rsi-needle { position: absolute; top: 0; width: 3px; height: 28px; background: #111; border-radius: 2px; transform: translateX(-50%); transition: left 0.4s ease; }
-        .rsi-scale  { display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-top: 4px; padding: 0 1px; }
+        .rsi-scale  { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-top: 4px; padding: 0 1px; }
         .rsi-value-label { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
 
         @media (max-width: 900px) {
@@ -510,7 +548,7 @@
             .sidebar { width: 100%; position: static; max-height: none; flex-direction: row; }
             .sidebar-header { writing-mode: horizontal-tb; }
             .sidebar-items { display: flex; flex-direction: row; overflow-x: auto; flex: 1; }
-            .wl-item { min-width: 160px; border-bottom: none; border-right: 1px solid #f0f0f0; }
+            .wl-item { min-width: 160px; border-bottom: none; border-right: 1px solid var(--border); }
         }
 
         @media (max-width: 768px) {
@@ -522,22 +560,22 @@
         /* ── Page-level tabs ── */
         .page-tabs-nav {
             display: flex;
-            background: #f8f9fa;
-            border-bottom: 2px solid #dee2e6;
+            background: var(--surface-2);
+            border-bottom: 2px solid var(--border);
         }
         .page-tab-btn {
             padding: 14px 26px;
             background: transparent;
             border: none;
             cursor: pointer;
-            color: #666;
+            color: var(--muted);
             font-weight: 600;
             font-size: 14px;
             border-bottom: 3px solid transparent;
             margin-bottom: -2px;
             transition: all 0.2s;
         }
-        .page-tab-btn.active { color: #667eea; border-bottom-color: #667eea; background: white; }
+        .page-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--surface-2); }
         .page-tab-btn:hover:not(.active) { background: #eee; }
         .page-section { display: none; }
         .page-section.active { display: block; }
@@ -549,185 +587,185 @@
             flex-wrap: wrap;
             align-items: center;
             padding: 18px 30px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
+            background: var(--surface-2);
+            border-bottom: 1px solid var(--border);
         }
-        .port-stat-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
-        .port-stat-value { font-size: 20px; font-weight: 700; color: #333; }
+        .port-stat-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
+        .port-stat-value { font-size: 20px; font-weight: 700; color: var(--text); }
         .port-stat-value.gain { color: #4caf50; }
         .port-stat-value.loss { color: #f44336; }
 
         .portfolio-form {
             padding: 16px 30px;
-            background: white;
-            border-bottom: 1px solid #dee2e6;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
             display: flex;
             gap: 12px;
             flex-wrap: wrap;
             align-items: flex-end;
         }
         .port-input-group { display: flex; flex-direction: column; gap: 4px; }
-        .port-input-group label { font-size: 12px; font-weight: 600; color: #555; }
-        .port-input-group input { padding: 9px 12px; border: 2px solid #dee2e6; border-radius: 6px; font-size: 14px; width: 120px; }
-        .port-input-group input:focus { outline: none; border-color: #667eea; }
+        .port-input-group label { font-size: 12px; font-weight: 600; color: var(--muted); }
+        .port-input-group input { padding: 9px 12px; border: 2px solid var(--border); border-radius: 6px; font-size: 14px; width: 120px; }
+        .port-input-group input:focus { outline: none; border-color: var(--accent); }
 
         .portfolio-table-wrap { padding: 20px 30px; overflow-x: auto; }
-        .portfolio-table-wrap { border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden; }
+        .portfolio-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
         .portfolio-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .portfolio-table th { background: #f8f9fa; padding: 10px 12px; text-align: left; font-size: 11px; color: #888; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
-        .portfolio-table td { padding: 11px 12px; border-top: 1px solid #f0f0f0; white-space: nowrap; vertical-align: middle; }
-        .portfolio-table tr:hover td { background: #fafafa; }
-        .port-symbol { font-weight: 800; color: #333; font-size: 14px; }
+        .portfolio-table th { background: var(--surface-2); padding: 10px 12px; text-align: left; font-size: 11px; color: var(--dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+        .portfolio-table td { padding: 11px 12px; border-top: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+        .portfolio-table tr:hover td { background: var(--surface-2); }
+        .port-symbol { font-weight: 800; color: var(--text); font-size: 14px; }
         .port-gain { color: #4caf50; font-weight: 600; }
         .port-loss { color: #f44336; font-weight: 600; }
         .port-score-badge { display: inline-block; color: white; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
         .port-action-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; }
         .port-btn { padding: 5px 10px; font-size: 12px; border-radius: 5px; cursor: pointer; transition: all 0.15s; }
-        .port-btn-danger { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
-        .port-btn-danger:hover { background: #f44336; color: white; }
-        .port-btn-analyze { background: #e8eaf6; color: #3949ab; border: 1px solid #c5cae9; }
-        .port-btn-analyze:hover { background: #3f51b5; color: white; }
-        .port-empty { padding: 50px 20px; text-align: center; color: #bbb; font-size: 14px; }
+        .port-btn-danger { background: rgba(255,93,108,0.12); color: var(--down); border: 1px solid rgba(255,93,108,0.32); }
+        .port-btn-danger:hover { background: var(--down); color: #14181f; }
+        .port-btn-analyze { background: rgba(76,141,255,0.12); color: var(--accent); border: 1px solid rgba(76,141,255,0.32); }
+        .port-btn-analyze:hover { background: var(--accent); color: #14181f; }
+        .port-empty { padding: 50px 20px; text-align: center; color: var(--faint); font-size: 14px; }
 
         .port-chart-wrap { padding: 0 30px 24px; }
-        .port-chart-box { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 14px; }
-        .port-chart-title { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; }
+        .port-chart-box { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+        .port-chart-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; }
 
         /* expandable detail rows */
         .port-main-row { cursor: pointer; }
-        .port-main-row:hover td { background: #f5f7ff !important; }
+        .port-main-row:hover td { background: var(--surface-2) !important; }
         .port-main-row td:first-child { border-left: 4px solid transparent; transition: border-color 0.2s; }
         .port-main-row.tier-strong td:first-child { border-left-color: #4caf50; }
         .port-main-row.tier-buy    td:first-child { border-left-color: #2196f3; }
         .port-main-row.tier-hold   td:first-child { border-left-color: #ff9800; }
-        .port-main-row.tier-wait   td:first-child { border-left-color: #ccc; }
+        .port-main-row.tier-wait   td:first-child { border-left-color: var(--faint); }
         .port-detail-row td { padding: 0 !important; border-top: none !important; }
-        .port-detail-panel { padding: 14px 20px 16px; background: #fafcff; border-top: 2px solid #e8eef8; }
-        .port-detail-explain { font-size: 13px; color: #444; line-height: 1.65; margin-bottom: 10px; }
+        .port-detail-panel { padding: 14px 20px 16px; background: var(--surface-2); border-top: 2px solid var(--border); }
+        .port-detail-explain { font-size: 13px; color: var(--muted); line-height: 1.65; margin-bottom: 10px; }
         .port-detail-pills { margin-bottom: 10px; }
         .port-detail-bars { display: flex; gap: 20px; }
         .port-detail-bars > div { flex: 1; min-width: 0; }
-        .port-detail-section-sep { border: none; border-top: 1px solid #eef0f8; margin: 10px 0; }
-        .port-expand-btn { background: none !important; border: none; color: #bbb; font-size: 14px; cursor: pointer; padding: 0 4px; line-height: 1; font-weight: 700; }
-        .port-expand-btn:hover { color: #667eea; background: none !important; }
-        .port-detail-col-title { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+        .port-detail-section-sep { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+        .port-expand-btn { background: none !important; border: none; color: var(--faint); font-size: 14px; cursor: pointer; padding: 0 4px; line-height: 1; font-weight: 700; }
+        .port-expand-btn:hover { color: var(--accent); background: none !important; }
+        .port-detail-col-title { font-size: 11px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
         .port-score-bar-row { margin-bottom: 6px; }
-        .port-score-bar-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; color: #555; }
-        .port-score-bar-track { background: #e9ecef; border-radius: 4px; height: 7px; }
+        .port-score-bar-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; color: var(--muted); }
+        .port-score-bar-track { background: var(--surface-2); border-radius: 4px; height: 7px; }
         .port-score-bar-fill { height: 7px; border-radius: 4px; transition: width 0.4s; }
-        .port-pill { display: inline-block; background: #f0f0f0; border-radius: 10px; padding: 2px 9px; font-size: 11px; font-weight: 600; color: #555; margin: 2px 3px 2px 0; }
+        .port-pill { display: inline-block; background: var(--border); border-radius: 10px; padding: 2px 9px; font-size: 11px; font-weight: 600; color: var(--muted); margin: 2px 3px 2px 0; }
         .port-risk-flag { font-size: 11px; color: #b45309; margin-bottom: 2px; }
-        .port-explain { font-size: 12px; color: #555; line-height: 1.6; max-width: 500px; }
+        .port-explain { font-size: 12px; color: var(--muted); line-height: 1.6; max-width: 500px; }
 
         /* insight box */
         .port-insight-box { margin: 14px 30px 0; padding: 12px 18px; background: linear-gradient(135deg,rgba(102,126,234,0.07),rgba(118,75,162,0.07)); border: 1px solid rgba(102,126,234,0.25); border-radius: 8px; }
-        .port-insight-title { font-size: 11px; font-weight: 700; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; }
-        .port-insight-chip { display: inline-flex; align-items: center; gap: 6px; background: white; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 600; margin: 2px 4px 2px 0; border: 1px solid #dee2e6; }
+        .port-insight-title { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; }
+        .port-insight-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 600; margin: 2px 4px 2px 0; border: 1px solid var(--border); }
 
         /* budget input */
-        .port-budget-wrap { border-left: 2px solid #667eea55; padding-left: 14px; }
-        .port-budget-wrap label { font-size: 12px; font-weight: 600; color: #667eea; }
-        .port-budget-wrap input { padding: 9px 12px; border: 2px solid #667eea55; border-radius: 6px; font-size: 14px; width: 130px; color: #333; }
-        .port-budget-wrap input:focus { outline: none; border-color: #667eea; }
+        .port-budget-wrap { border-left: 2px solid var(--accent)55; padding-left: 14px; }
+        .port-budget-wrap label { font-size: 12px; font-weight: 600; color: var(--accent); }
+        .port-budget-wrap input { padding: 9px 12px; border: 2px solid var(--accent)55; border-radius: 6px; font-size: 14px; width: 130px; color: var(--text); }
+        .port-budget-wrap input:focus { outline: none; border-color: var(--accent); }
 
         /* ── Allocation overview (3 sleeves) ── */
         .port-alloc-wrap { padding: 16px 30px 4px; }
-        .port-alloc-title { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .port-alloc-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
         .port-alloc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
-        .port-alloc-card { border: 1px solid #e3e6ec; border-top: 3px solid var(--c); border-radius: 8px; padding: 14px 16px; background: #fff; }
+        .port-alloc-card { border: 1px solid var(--border); border-top: 3px solid var(--c); border-radius: 8px; padding: 14px 16px; background: var(--surface); }
         .port-alloc-head { display: flex; align-items: baseline; gap: 7px; margin-bottom: 2px; }
         .port-alloc-emoji { font-size: 17px; }
-        .port-alloc-name { font-size: 13px; font-weight: 700; color: #333; }
-        .port-alloc-blurb { font-size: 11px; color: #999; line-height: 1.4; margin-bottom: 10px; min-height: 30px; }
+        .port-alloc-name { font-size: 13px; font-weight: 700; color: var(--text); }
+        .port-alloc-blurb { font-size: 11px; color: var(--dim); line-height: 1.4; margin-bottom: 10px; min-height: 30px; }
         .port-alloc-figs { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 8px; }
         .port-alloc-cur { font-size: 26px; font-weight: 800; color: var(--c); line-height: 1; }
         .port-alloc-cur small { font-size: 13px; font-weight: 600; }
-        .port-alloc-val { font-size: 11px; color: #888; text-align: right; }
-        .port-alloc-bar { position: relative; background: #eef0f4; border-radius: 4px; height: 8px; margin-bottom: 8px; overflow: hidden; }
+        .port-alloc-val { font-size: 11px; color: var(--dim); text-align: right; }
+        .port-alloc-bar { position: relative; background: var(--surface-2); border-radius: 4px; height: 8px; margin-bottom: 8px; overflow: hidden; }
         .port-alloc-bar-fill { height: 8px; border-radius: 4px; background: var(--c); transition: width 0.4s; }
-        .port-alloc-bar-target { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #333; }
-        .port-alloc-targetrow { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666; }
-        .port-alloc-targetrow input { width: 52px; padding: 4px 6px; border: 1px solid #d4d8e0; border-radius: 5px; font-size: 12px; text-align: right; }
+        .port-alloc-bar-target { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
+        .port-alloc-targetrow { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+        .port-alloc-targetrow input { width: 52px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; font-size: 12px; text-align: right; }
         .port-alloc-targetrow input:focus { outline: none; border-color: var(--c); }
         .port-alloc-delta { font-weight: 700; margin-left: auto; }
         .port-alloc-delta.under { color: #e53935; }
         .port-alloc-delta.over  { color: #fb8c00; }
         .port-alloc-delta.ok    { color: #43a047; }
-        .port-alloc-tip { margin-top: 12px; font-size: 12px; color: #555; background: #f8f9fb; border: 1px solid #e8ebf1; border-radius: 7px; padding: 9px 13px; line-height: 1.5; }
+        .port-alloc-tip { margin-top: 12px; font-size: 12px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 9px 13px; line-height: 1.5; }
 
         /* ── Sleeve grouping in holdings table ── */
         .port-group-row td { background: var(--c-soft) !important; border-top: 2px solid var(--c) !important; padding: 9px 14px !important; }
         .port-group-row:hover td { background: var(--c-soft) !important; }
         .port-group-emoji { font-size: 15px; margin-right: 6px; }
-        .port-group-name { font-weight: 800; color: #333; font-size: 13px; }
-        .port-group-blurb { font-size: 11px; color: #999; font-weight: 400; margin-left: 8px; }
-        .port-group-stats { float: right; font-size: 12px; color: #555; font-weight: 600; }
-        .port-group-stats .sub { color: #999; font-weight: 400; }
-        .port-sleeve-select { font-size: 10px; color: #777; border: 1px solid #dde1e8; border-radius: 5px; padding: 1px 4px; margin-top: 3px; background: #fafbfc; cursor: pointer; max-width: 132px; }
-        .port-sleeve-select:focus { outline: none; border-color: #667eea; }
-        .port-sleeve-auto { font-size: 9px; color: #aaa; margin-left: 3px; }
+        .port-group-name { font-weight: 800; color: var(--text); font-size: 13px; }
+        .port-group-blurb { font-size: 11px; color: var(--dim); font-weight: 400; margin-left: 8px; }
+        .port-group-stats { float: right; font-size: 12px; color: var(--muted); font-weight: 600; }
+        .port-group-stats .sub { color: var(--dim); font-weight: 400; }
+        .port-sleeve-select { font-size: 10px; color: var(--dim); border: 1px solid var(--border); border-radius: 5px; padding: 1px 4px; margin-top: 3px; background: var(--surface-2); cursor: pointer; max-width: 132px; }
+        .port-sleeve-select:focus { outline: none; border-color: var(--accent); }
+        .port-sleeve-auto { font-size: 9px; color: var(--faint); margin-left: 3px; }
 
         /* ── Portfolio Review ── */
         .port-review-wrap { padding: 16px 30px 4px; }
         .port-review-header { cursor: pointer; user-select: none; }
-        .port-review-header:hover .port-review-chevron { color: #555; }
-        .port-review-subtitle { font-weight: 400; text-transform: none; letter-spacing: 0; color: #999; font-size: 11px; }
+        .port-review-header:hover .port-review-chevron { color: var(--muted); }
+        .port-review-subtitle { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--dim); font-size: 11px; }
         .port-review-headgrade { margin-left: auto; font-size: 12px; }
-        .port-review-chevron { margin-left: 12px; color: #aaa; font-size: 13px; transition: transform 0.2s; }
+        .port-review-chevron { margin-left: 12px; color: var(--faint); font-size: 13px; transition: transform 0.2s; }
         .port-review-header.collapsed .port-review-chevron { transform: rotate(-90deg); }
         @media (max-width: 620px) { .port-review-subtitle { display: none; } }
-        .port-review-card { border: 1px solid #e3e6ec; border-radius: 10px; padding: 18px 20px; background: #fff; }
-        .port-review-top { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #f0f0f0; padding-bottom: 14px; margin-bottom: 14px; }
+        .port-review-card { border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; background: var(--surface); }
+        .port-review-top { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 14px; margin-bottom: 14px; }
         .port-review-scorebox { text-align: center; min-width: 96px; }
         .port-review-grade { font-size: 44px; font-weight: 800; line-height: 1; }
-        .port-review-score { font-size: 12px; color: #888; margin-top: 4px; font-weight: 600; }
+        .port-review-score { font-size: 12px; color: var(--dim); margin-top: 4px; font-weight: 600; }
         .port-review-verdict { flex: 1; min-width: 240px; }
-        .port-review-verdict-title { font-size: 16px; font-weight: 700; color: #333; margin-bottom: 3px; }
-        .port-review-verdict-sub { font-size: 13px; color: #666; line-height: 1.5; }
+        .port-review-verdict-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+        .port-review-verdict-sub { font-size: 13px; color: var(--muted); line-height: 1.5; }
         .port-review-pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 26px; }
-        .port-review-pillar-detail { font-size: 11px; color: #999; margin-top: 3px; }
-        .port-review-note { font-size: 12px; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 12px; margin-top: 12px; }
+        .port-review-pillar-detail { font-size: 11px; color: var(--dim); margin-top: 3px; }
+        .port-review-note { font-size: 12px; color: #f5b955; background: rgba(245,165,36,0.10); border: 1px solid rgba(245,165,36,0.30); border-radius: 6px; padding: 8px 12px; margin-top: 12px; }
         .port-review-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px; }
         @media (max-width: 760px) { .port-review-cols { grid-template-columns: 1fr; gap: 14px; } }
         .port-review-col-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
         .port-review-list { list-style: none; padding: 0; margin: 0; }
-        .port-review-list li { font-size: 13px; line-height: 1.55; color: #444; padding: 5px 0 5px 24px; position: relative; }
+        .port-review-list li { font-size: 13px; line-height: 1.55; color: var(--muted); padding: 5px 0 5px 24px; position: relative; }
         .port-review-list.port-crit li:before { content: '⚠️'; position: absolute; left: 0; }
         .port-review-list.port-sugg li:before { content: '💡'; position: absolute; left: 0; }
         .port-review-list.port-moves li:before { content: '➡️'; position: absolute; left: 0; }
 
         /* ── Market & Sectors ── */
         .port-market-wrap { padding: 16px 30px 4px; }
-        .port-market-card { border: 1px solid #e3e6ec; border-radius: 10px; padding: 16px 18px; background: #fff; }
-        .port-market-regime { font-size: 13px; color: #555; margin-bottom: 12px; }
-        .port-market-regime b { color: #333; }
+        .port-market-card { border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; background: var(--surface); }
+        .port-market-regime { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+        .port-market-regime b { color: var(--text); }
         .port-market-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 760px) { .port-market-cols { grid-template-columns: 1fr; gap: 14px; } }
         .port-market-col-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 9px; }
         .port-sector-chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 600; margin: 0 6px 7px 0; border: 1px solid; }
         .port-sector-chip .rs { font-weight: 800; }
         .port-sector-chip .ex { font-weight: 400; opacity: 0.6; font-size: 11px; }
-        .port-market-loading { color: #999; font-size: 13px; padding: 10px 0; }
+        .port-market-loading { color: var(--dim); font-size: 13px; padding: 10px 0; }
         .port-suggest-btn { padding: 10px 18px; white-space: nowrap; background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; transition: opacity 0.2s; }
         .port-suggest-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .port-suggest-btn:not(:disabled):hover { opacity: 0.9; }
 
         /* ── Portfolio sub-tabs ── */
-        .port-subtabs { display: flex; gap: 4px; padding: 12px 30px 0; background: #f8f9fa; border-bottom: 1px solid #dee2e6; }
-        .port-subtab-btn { padding: 10px 20px; border: none; background: transparent; color: #888; font-weight: 600; font-size: 13.5px; cursor: pointer; border-radius: 8px 8px 0 0; border-bottom: 3px solid transparent; margin-bottom: -1px; transition: color 0.15s, background 0.15s; }
-        .port-subtab-btn:hover { color: #555; background: rgba(102,126,234,0.08); }
-        .port-subtab-btn.active, .port-subtab-btn.active:hover { color: #667eea; border-bottom-color: #667eea; background: #fff; }
+        .port-subtabs { display: flex; gap: 4px; padding: 12px 30px 0; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+        .port-subtab-btn { padding: 10px 20px; border: none; background: transparent; color: var(--dim); font-weight: 600; font-size: 13.5px; cursor: pointer; border-radius: 8px 8px 0 0; border-bottom: 3px solid transparent; margin-bottom: -1px; transition: color 0.15s, background 0.15s; }
+        .port-subtab-btn:hover { color: var(--muted); background: rgba(102,126,234,0.08); }
+        .port-subtab-btn.active, .port-subtab-btn.active:hover { color: var(--accent); border-bottom-color: var(--accent); background: var(--surface); }
         .port-subsection { display: none; }
         .port-subsection.active { display: block; }
 
         /* ── What To Do Now (consolidated action list) ── */
         .port-action-wrap { padding: 16px 30px 4px; }
-        .port-action-card { border: 1px solid #e3e6ec; border-radius: 10px; padding: 6px 18px 14px; background: #fff; }
+        .port-action-card { border: 1px solid var(--border); border-radius: 10px; padding: 6px 18px 14px; background: var(--surface); }
 
         /* ── Scan Watchlist ── */
         .sidebar-footer {
             padding: 12px;
-            border-top: 1px solid #f0f0f0;
+            border-top: 1px solid var(--border);
             flex-shrink: 0;
         }
         #scanBtn {
@@ -756,7 +794,7 @@
             padding: 20px;
         }
         .scan-modal {
-            background: white;
+            background: var(--surface);
             border-radius: 14px;
             width: 100%;
             max-width: 740px;
@@ -777,23 +815,23 @@
         .scan-modal-header span {
             font-weight: 700;
             font-size: 15px;
-            color: #333;
+            color: var(--text);
         }
         .scan-modal-header button {
             background: none;
             border: none;
             font-size: 20px;
-            color: #999;
+            color: var(--dim);
             cursor: pointer;
             line-height: 1;
             padding: 0 4px;
         }
-        .scan-modal-header button:hover { color: #333; }
+        .scan-modal-header button:hover { color: var(--text); }
         .scan-progress {
             padding: 10px 20px;
             font-size: 12px;
-            color: #888;
-            border-bottom: 1px solid #f5f5f5;
+            color: var(--dim);
+            border-bottom: 1px solid var(--border);
             flex-shrink: 0;
             min-height: 36px;
             display: flex;
@@ -819,8 +857,8 @@
             padding: 12px 16px;
         }
         .scan-result-row {
-            border-left: 4px solid #ccc;
-            background: #fafafa;
+            border-left: 4px solid var(--faint);
+            background: var(--surface-2);
             border-radius: 8px;
             padding: 10px 14px;
             margin-bottom: 8px;
@@ -829,7 +867,7 @@
         .scan-result-row.tier-buy    { border-left-color: #2196f3; }
         .scan-result-row.tier-hold   { border-left-color: #ff9800; }
         .scan-result-row.tier-wait   { border-left-color: #9e9e9e; }
-        .scan-result-row.tier-error  { border-left-color: #f44336; background: #fff5f5; }
+        .scan-result-row.tier-error  { border-left-color: var(--down); background: rgba(255,93,108,0.08); }
         .scan-row-top {
             display: flex;
             align-items: center;
@@ -837,8 +875,8 @@
             flex-wrap: wrap;
             margin-bottom: 5px;
         }
-        .scan-rank { font-size: 11px; color: #aaa; font-weight: 600; min-width: 22px; }
-        .scan-sym  { font-weight: 800; font-size: 15px; color: #222; min-width: 52px; }
+        .scan-rank { font-size: 11px; color: var(--faint); font-weight: 600; min-width: 22px; }
+        .scan-sym  { font-weight: 800; font-size: 15px; color: var(--text); min-width: 52px; }
         .scan-score-badge {
             font-size: 11px;
             font-weight: 700;
@@ -846,23 +884,23 @@
             border-radius: 10px;
             color: white;
         }
-        .scan-rec  { font-size: 11px; color: #555; }
-        .scan-price { font-size: 12px; color: #333; margin-left: auto; }
-        .scan-dd   { font-size: 11px; color: #888; }
+        .scan-rec  { font-size: 11px; color: var(--muted); }
+        .scan-price { font-size: 12px; color: var(--text); margin-left: auto; }
+        .scan-dd   { font-size: 11px; color: var(--dim); }
         .scan-row-bottom {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
             font-size: 11px;
-            color: #666;
+            color: var(--muted);
         }
         .scan-fund-chip {
-            background: #f0f0f0;
+            background: var(--border);
             border-radius: 5px;
             padding: 2px 7px;
         }
         .scan-error-msg { font-size: 12px; color: #f44336; }
-        .scan-empty { padding: 40px 20px; text-align: center; color: #aaa; font-size: 13px; }
+        .scan-empty { padding: 40px 20px; text-align: center; color: var(--faint); font-size: 13px; }
 
         /* ── Scan Filter Bar ── */
         .scan-filter-bar {
@@ -873,7 +911,7 @@
             flex-wrap: wrap;
             gap: 8px;
             align-items: center;
-            background: #fafafa;
+            background: var(--surface-2);
         }
         .scan-filter-chips {
             display: flex;
@@ -883,18 +921,18 @@
         }
         .scan-chip {
             border: 1.5px solid #ddd;
-            background: white;
+            background: var(--surface);
             border-radius: 20px;
             padding: 3px 10px;
             font-size: 11px;
             font-weight: 600;
             cursor: pointer;
-            color: #666;
+            color: var(--muted);
             transition: all 0.15s;
             white-space: nowrap;
         }
-        .scan-chip:hover { border-color: #667eea; color: #667eea; }
-        .scan-chip.active { background: #667eea; border-color: #667eea; color: white; }
+        .scan-chip:hover { border-color: var(--accent); color: var(--accent); }
+        .scan-chip.active { background: var(--accent); border-color: var(--accent); color: white; }
         .scan-chip.chip-strong.active  { background: #4caf50; border-color: #4caf50; }
         .scan-chip.chip-buy.active     { background: #2196f3; border-color: #2196f3; }
         .scan-chip.chip-accum.active   { background: #00bcd4; border-color: #00bcd4; }
@@ -910,7 +948,7 @@
         }
         .scan-filter-controls label {
             font-size: 11px;
-            color: #888;
+            color: var(--dim);
             white-space: nowrap;
         }
         .scan-filter-controls select {
@@ -918,16 +956,16 @@
             border: 1.5px solid #ddd;
             border-radius: 6px;
             padding: 3px 6px;
-            background: white;
-            color: #333;
+            background: var(--surface);
+            color: var(--text);
             cursor: pointer;
         }
         .scan-filter-controls input[type=range] {
             width: 70px;
-            accent-color: #667eea;
+            accent-color: var(--accent);
         }
-        #scanFilterScore { font-weight: 700; color: #667eea; }
-        .scan-filter-count { font-size: 11px; color: #aaa; margin-left: 4px; }
+        #scanFilterScore { font-weight: 700; color: var(--accent); }
+        .scan-filter-count { font-size: 11px; color: var(--faint); margin-left: 4px; }
     </style>
 </head>
 <body>
@@ -1079,7 +1117,7 @@
                     <div class="port-stat" style="flex:1"></div>
                     <div style="text-align:right">
                         <div class="port-stat-label">Last Updated</div>
-                        <div style="font-size:13px;color:#888" id="portLastUpdated">Not refreshed yet</div>
+                        <div style="font-size:13px;color:var(--dim)" id="portLastUpdated">Not refreshed yet</div>
                     </div>
                     <button id="portSuggestBtn" onclick="suggestNextMove()" class="port-suggest-btn">💡 Suggest</button>
                     <button id="portRefreshBtn" onclick="refreshPortfolio()" style="padding:10px 20px;white-space:nowrap">🔄 Refresh All</button>
@@ -1157,13 +1195,13 @@
                     <div class="port-alloc-title">✅ What To Do Now <span class="port-review-subtitle">— your single prioritized action list: this week's buys, rebalancing, sector timing, and portfolio gaps. Hit 💡 Suggest to fold in live sector data.</span></div>
                     <div class="port-action-card">
                         <ul class="port-review-list port-moves" id="portActionList"></ul>
-                        <div id="portActionNote" style="font-size:11px;color:#aaa;margin-top:8px"></div>
+                        <div id="portActionNote" style="font-size:11px;color:var(--faint);margin-top:8px"></div>
                     </div>
                 </div>
 
                 <!-- Allocation Overview: 3 sleeves -->
                 <div class="port-alloc-wrap" id="portAllocWrap" style="display:none">
-                    <div class="port-alloc-title">🎯 Allocation by Type <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#999;font-size:11px">— current weight vs. your target. Reassign any holding's type in the Holdings table.</span></div>
+                    <div class="port-alloc-title">🎯 Allocation by Type <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim);font-size:11px">— current weight vs. your target. Reassign any holding's type in the Holdings table.</span></div>
                     <div class="port-alloc-grid" id="portAllocGrid"></div>
                 </div>
 
@@ -1223,7 +1261,7 @@
             </div><!-- end portfolioPage -->
 
             <div class="footer" id="apiKeyTip">
-                💡 <strong>Tip:</strong> Get your free API key from <a href="https://www.alphavantage.co/api/" target="_blank" style="color: #667eea;">alphavantage.co</a>
+                💡 <strong>Tip:</strong> Get your free API key from <a href="https://www.alphavantage.co/api/" target="_blank" style="color: var(--accent);">alphavantage.co</a>
                 and set it as: <code>export ALPHA_VANTAGE_KEY=your_key_here</code>
             </div>
         </div>
@@ -1231,6 +1269,12 @@
     </div>
 
     <script>
+        // Dark-theme defaults for all Chart.js canvases
+        if (window.Chart) {
+            Chart.defaults.color = '#97a3bb';
+            Chart.defaults.borderColor = 'rgba(120,140,180,0.12)';
+            Chart.defaults.font.family = "'JetBrains Mono', ui-monospace, monospace";
+        }
         let currentData = null;
         let priceChartInst = null;
         let volumeChartInst = null;
@@ -1332,7 +1376,7 @@
                 data: {
                     labels,
                     datasets: [
-                        { label: 'Price',  data: closes, borderColor: '#667eea', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 },
+                        { label: 'Price',  data: closes, borderColor: 'var(--accent)', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 },
                         { label: 'MA 20',  data: ma20s,  borderColor: '#ff9800', borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.1, borderDash: [4,2] },
                         { label: 'MA 50',  data: ma50s,  borderColor: '#2196f3', borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.1, borderDash: [4,2] }
                     ]
@@ -1393,9 +1437,9 @@
                     addToWatchlist(data);
                     if (data.errors && data.errors.length > 0) {
                         const infoDiv = document.getElementById('error');
-                        infoDiv.style.background = '#fff8e1';
-                        infoDiv.style.color = '#e65100';
-                        infoDiv.style.borderColor = '#ffa000';
+                        infoDiv.style.background = 'rgba(245,165,36,0.10)';
+                        infoDiv.style.color = '#f5b955';
+                        infoDiv.style.borderColor = 'rgba(245,165,36,0.32)';
                         infoDiv.textContent = 'ℹ️ ' + data.errors.join(' | ');
                         infoDiv.style.display = 'block';
                     }
@@ -1427,7 +1471,7 @@
             const color = scoreBarColor(pct);
             return `<div class="score-bar-row">
                 <div class="score-bar-label">
-                    <span style="color:#444">${label}</span>
+                    <span style="color:var(--muted)">${label}</span>
                     <span style="color:${color};font-weight:700">${score}/${max} (${pct}%)</span>
                 </div>
                 <div class="score-bar-track">
@@ -1449,7 +1493,7 @@
             return `<tr>
                 <td>${label}</td>
                 <td style="color:${color};font-weight:600">${sig.label}</td>
-                <td style="color:#888;font-family:monospace;font-size:12px">${sig.value || ''}</td>
+                <td style="color:var(--dim);font-family:monospace;font-size:12px">${sig.value || ''}</td>
                 <td style="text-align:center">${signalBadge(sig.score, sig.max)}</td>
             </tr>`;
         }
@@ -1535,7 +1579,7 @@
             if (sb.fundamental) {
                 barsHtml += scoreBar('Fundamentals — P/E, ROE, margins, revenue growth', sb.fundamental.score, sb.fundamental.max, sb.fundamental.pct);
             } else {
-                barsHtml += `<div style="font-size:11px;color:#aaa;margin-top:4px">Fundamental score excluded — set ALPHA_VANTAGE_KEY for +20% weight</div>`;
+                barsHtml += `<div style="font-size:11px;color:var(--faint);margin-top:4px">Fundamental score excluded — set ALPHA_VANTAGE_KEY for +20% weight</div>`;
             }
             if (data.analysis.riskFlags && data.analysis.riskFlags.length) {
                 barsHtml += `<div class="risk-flags" style="margin-top:12px;margin-bottom:0">
@@ -1623,9 +1667,9 @@
             // ── Fundamental metrics ──
             const fundContainer = document.getElementById('fundamentalMetrics');
             if (!data.fundamental) {
-                fundContainer.innerHTML = `<div style="padding:24px;color:#888;grid-column:1/-1;text-align:center">
+                fundContainer.innerHTML = `<div style="padding:24px;color:var(--dim);grid-column:1/-1;text-align:center">
                     ℹ️ Set <code>ALPHA_VANTAGE_KEY</code> environment variable and restart the server.<br>
-                    Free key at <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:#667eea">alphavantage.co</a>
+                    Free key at <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:var(--accent)">alphavantage.co</a>
                 </div>`;
             } else {
                 const fund = data.fundamental;
@@ -1785,7 +1829,7 @@
         function renderFundQuality(fq) {
             const el = document.getElementById('factsheetScore');
             if (!fq) { el.innerHTML = ''; return; }
-            const color = GRADE_COLORS[fq.grade] || '#667eea';
+            const color = GRADE_COLORS[fq.grade] || 'var(--accent)';
             const classChip = fq.assetClass
                 ? `<span class="fq-class-chip">${CLASS_LABELS[fq.assetClass] || fq.assetClass}</span>` : '';
             const rows = fq.components.map(c => {
@@ -2007,7 +2051,7 @@
                 const drawdown = r.drawdownFromHigh != null ? `&#x25BC;${parseFloat(r.drawdownFromHigh).toFixed(1)}% from high` : '';
 
                 const axesChip = (r.entryScore != null || r.qualityScore != null)
-                    ? `<span class="scan-fund-chip" style="color:#555">🟢 Entry ${r.entryScore ?? '—'} · 🔵 Quality ${r.qualityScore ?? '—'}${r.quadrant ? ' — ' + r.quadrant : ''}</span>`
+                    ? `<span class="scan-fund-chip" style="color:var(--muted)">🟢 Entry ${r.entryScore ?? '—'} · 🔵 Quality ${r.qualityScore ?? '—'}${r.quadrant ? ' — ' + r.quadrant : ''}</span>`
                     : '';
                 return `<div class="scan-result-row ${tierClass(r.recommendation)}">
                     <div class="scan-row-top">
@@ -2261,11 +2305,11 @@
 
         // ── Sleeves: the 3 portfolio types ──────────────────────────
         const SLEEVES = {
-            growth: { label: 'High Risk / High Return', emoji: '🚀', color: '#e53935', soft: '#fdecea',
+            growth: { label: 'High Risk / High Return', emoji: '🚀', color: '#ff6b66', soft: 'rgba(255,93,108,0.10)',
                       blurb: 'Aggressive growth — biggest upside, biggest swings', defaultTarget: 21 },
-            core:   { label: 'Moderate / Consistent',   emoji: '⚖️', color: '#1e88e5', soft: '#e9f1fb',
+            core:   { label: 'Moderate / Consistent',   emoji: '⚖️', color: '#4c8dff', soft: 'rgba(76,141,255,0.10)',
                       blurb: 'Steady compounders & broad market — the backbone', defaultTarget: 60 },
-            safe:   { label: 'Safe Haven',              emoji: '🛡️', color: '#43a047', soft: '#eaf5ec',
+            safe:   { label: 'Safe Haven',              emoji: '🛡️', color: '#3fce8a', soft: 'rgba(38,208,124,0.10)',
                       blurb: 'Holds up (or gains) in a crash — dry powder to deploy', defaultTarget: 19 },
         };
         const SLEEVE_ORDER = ['growth', 'core', 'safe'];
@@ -2456,8 +2500,8 @@
 
         function portReviewPillarHtml(pl) {
             const pct = pl.score == null ? 0 : Math.round(pl.score / pl.max * 100);
-            const color = pl.score == null ? '#bbb' : pct >= 67 ? '#43a047' : pct >= 34 ? '#ff9800' : '#e53935';
-            const right = pl.score == null ? '<span style="color:#bbb;font-size:11px">n/a</span>' : `<span style="color:${color};font-weight:700">${pl.score}/${pl.max}</span>`;
+            const color = pl.score == null ? 'var(--faint)' : pct >= 67 ? '#43a047' : pct >= 34 ? '#ff9800' : '#e53935';
+            const right = pl.score == null ? '<span style="color:var(--faint);font-size:11px">n/a</span>' : `<span style="color:${color};font-weight:700">${pl.score}/${pl.max}</span>`;
             return `<div>
                 <div class="port-score-bar-label"><span>${pl.label}</span>${right}</div>
                 <div class="port-score-bar-track"><div class="port-score-bar-fill" style="width:${pct}%;background:${color}"></div></div>
@@ -2554,11 +2598,11 @@
 
         function sectorChipStyle(status) {
             switch (status) {
-                case 'Leading': return { bg: '#e7f6ea', border: '#a5d6b0', color: '#1e7e34' };
-                case 'Bullish': return { bg: '#eef7ec', border: '#c3e0bd', color: '#3a8a3f' };
-                case 'Caution': return { bg: '#fff4e5', border: '#ffd699', color: '#c47f17' };
-                case 'Lagging': return { bg: '#fdecea', border: '#f5b7b1', color: '#c0392b' };
-                default:        return { bg: '#f1f3f5', border: '#dde1e6', color: '#666' };
+                case 'Leading': return { bg: 'rgba(38,208,124,0.14)', border: 'rgba(38,208,124,0.4)', color: '#48e295' };
+                case 'Bullish': return { bg: 'rgba(38,208,124,0.10)', border: 'rgba(38,208,124,0.3)', color: '#3fce8a' };
+                case 'Caution': return { bg: 'rgba(245,165,36,0.14)', border: 'rgba(245,165,36,0.4)', color: '#f5b955' };
+                case 'Lagging': return { bg: 'rgba(255,93,108,0.14)', border: 'rgba(255,93,108,0.4)', color: '#ff7480' };
+                default:        return { bg: 'var(--surface-2)', border: 'var(--border)', color: 'var(--muted)' };
             }
         }
 
@@ -2637,12 +2681,12 @@
                 return `<span class="port-sector-chip" style="background:${st.bg};border-color:${st.border};color:${st.color}" title="${x.status} · ${x.aboveMA50 ? 'above' : 'below'} 50-day, ${x.aboveMA200 ? 'above' : 'below'} 200-day · 20d ${x.ret20}%">${x.name} <span class="rs">${sign}${x.relStrength}%</span> <span class="ex">${(x.examples || []).slice(0, 3).join(' ')}</span></span>`;
             };
             document.getElementById('portMarketBody').innerHTML = `
-                <div class="port-market-regime">Market regime: <b>${s.spyRegime}</b>${s.spyPrice ? ` · SPY $${s.spyPrice}` : ''} <span style="color:#aaa">· % = 20/60-day strength vs SPY</span></div>
+                <div class="port-market-regime">Market regime: <b>${s.spyRegime}</b>${s.spyPrice ? ` · SPY $${s.spyPrice}` : ''} <span style="color:var(--faint)">· % = 20/60-day strength vs SPY</span></div>
                 <div class="port-market-cols">
-                    <div><div class="port-market-col-title" style="color:#1e8e3e">🔥 Wind at their back</div>${bullish.length ? bullish.map(chip).join('') : '<span style="color:#999;font-size:12px">No clearly leading sectors right now.</span>'}</div>
-                    <div><div class="port-market-col-title" style="color:#c0392b">⚠️ Be aware / lagging</div>${aware.length ? aware.map(chip).join('') : '<span style="color:#999;font-size:12px">Nothing notably weak.</span>'}</div>
+                    <div><div class="port-market-col-title" style="color:#1e8e3e">🔥 Wind at their back</div>${bullish.length ? bullish.map(chip).join('') : '<span style="color:var(--dim);font-size:12px">No clearly leading sectors right now.</span>'}</div>
+                    <div><div class="port-market-col-title" style="color:#c0392b">⚠️ Be aware / lagging</div>${aware.length ? aware.map(chip).join('') : '<span style="color:var(--dim);font-size:12px">Nothing notably weak.</span>'}</div>
                 </div>
-                <div style="font-size:11px;color:#aaa;margin-top:12px">As of ${new Date(s.asOf).toLocaleString()} · <a href="#" onclick="event.preventDefault();loadSectors(true)" style="color:#888">refresh sectors</a> · turn this into actions in the <a href="#" onclick="event.preventDefault();switchPortSub('subPlan')" style="color:#888">Plan tab</a>.</div>`;
+                <div style="font-size:11px;color:var(--faint);margin-top:12px">As of ${new Date(s.asOf).toLocaleString()} · <a href="#" onclick="event.preventDefault();loadSectors(true)" style="color:var(--dim)">refresh sectors</a> · turn this into actions in the <a href="#" onclick="event.preventDefault();switchPortSub('subPlan')" style="color:var(--dim)">Plan tab</a>.</div>`;
         }
 
         // Consolidated "What To Do Now": this week's buys + rebalance + sector timing + gaps
@@ -2804,15 +2848,15 @@
                 // Score badge
                 const scoreHtml = p.dcaScore != null
                     ? `<span class="port-score-badge" style="background:${scoreColor(p.dcaScore)}">${p.dcaScore.toFixed(0)}/100</span>`
-                    : '<span style="color:#ccc">—</span>';
+                    : '<span style="color:var(--faint)">—</span>';
 
                 // Entry / Quality
                 const eqHtml = p.entryScore != null
                     ? `<span style="font-size:12px">🟢<b>${p.entryScore}</b> · 🔵<b>${p.qualityScore}</b></span>`
-                    : '<span style="color:#ccc">—</span>';
+                    : '<span style="color:var(--faint)">—</span>';
 
                 // Action column — show $ if budget set
-                let actionHtml = '<span style="color:#ccc">—</span>';
+                let actionHtml = '<span style="color:var(--faint)">—</span>';
                 if (p.allocationPct != null) {
                     const ac = portAllocColor(p.allocationPct);
                     const dollarStr = budget ? ` · $${fmt0(budget * p.allocationPct / 100)}` : '';
@@ -2820,13 +2864,13 @@
                 }
 
                 // Sector tag
-                const sectorTag = p.sector ? `<span style="font-size:10px;color:#888;font-weight:400;margin-left:4px">${p.sector}</span>` : '';
+                const sectorTag = p.sector ? `<span style="font-size:10px;color:var(--dim);font-weight:400;margin-left:4px">${p.sector}</span>` : '';
 
                 rows.push(`<tr class="port-main-row ${portTierClass(p.recommendation)}" onclick="toggleDetail('${p.symbol}')">
                     <td><span class="port-symbol">${p.symbol}</span>${sectorTag}<div onclick="event.stopPropagation()">${sleeveSelectHtml(p)}</div></td>
                     <td>${p.shares}</td>
                     <td>$${fmt(invested)}</td>
-                    <td>${val != null ? '$' + fmt(val) : '<span style="color:#ccc">—</span>'}</td>
+                    <td>${val != null ? '$' + fmt(val) : '<span style="color:var(--faint)">—</span>'}</td>
                     <td class="${rowClass}">${rowPLPct != null ? rowSign + rowPLPct.toFixed(1) + '%' : '—'}</td>
                     <td>${weight != null ? weight.toFixed(1) + '%' : '—'}</td>
                     <td>${scoreHtml}</td>
@@ -2862,7 +2906,7 @@
                     rows.push(`<tr class="port-detail-row">
                         <td colspan="10">
                             <div class="port-detail-panel">
-                                ${!hasData ? `<div style="color:#bbb;font-size:13px">Click 🔄 Refresh All to load analysis data.</div>` : ''}
+                                ${!hasData ? `<div style="color:var(--faint);font-size:13px">Click 🔄 Refresh All to load analysis data.</div>` : ''}
                                 ${p.explanation ? `<div class="port-detail-explain">${p.explanation}${flags ? '<div style="margin-top:6px">' + flags + '</div>' : ''}</div>` : ''}
                                 ${pills ? `<div class="port-detail-pills">${pills}</div>` : ''}
                                 ${(eBar || qBar) ? `<hr class="port-detail-section-sep"><div class="port-detail-col-title">Score Breakdown</div><div class="port-detail-bars"><div>${eBar}</div><div>${qBar}</div></div>` : ''}
@@ -2940,7 +2984,7 @@
                 data: {
                     labels: portfolioHistory.map(s => s.date.slice(0, 10)),
                     datasets: [
-                        { label: 'Portfolio Value', data: portfolioHistory.map(s => s.totalValue),    borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.08)', borderWidth: 2, pointRadius: 3, fill: true,  tension: 0.3 },
+                        { label: 'Portfolio Value', data: portfolioHistory.map(s => s.totalValue),    borderColor: 'var(--accent)', backgroundColor: 'rgba(102,126,234,0.08)', borderWidth: 2, pointRadius: 3, fill: true,  tension: 0.3 },
                         { label: 'Total Invested',  data: portfolioHistory.map(s => s.totalInvested), borderColor: '#ff9800', borderWidth: 1.5, pointRadius: 2, fill: false, tension: 0.3, borderDash: [4,2] }
                     ]
                 },
